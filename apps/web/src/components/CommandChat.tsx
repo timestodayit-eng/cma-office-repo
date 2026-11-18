@@ -9,7 +9,8 @@ type Rec = { lang: string; interimResults: boolean; onresult: (e: { results: { 0
 /** Small renderer: **bold**, [text](/link), lines and "- " lists. Nothing else is turned into HTML. */
 function Rich({ text }: { text: string }) {
   const inline = (s: string, k: number) =>
-    s.split(/(\[[^\]]+\]\((?:\/|https?:\/\/)[^)\s]+\)|\*\*[^*]+\*\*)/g).map((part, i) => {
+    s.split(/(\[[^\]]+\]\((?:\/|https?:\/\/)[^)\s]+\)|\*\*[^*]+\*\*|(?<![\w(])\/(?:tasks|interviews)\/[a-z0-9]+)/g).map((part, i) => {
+      if (/^\/(?:tasks|interviews)\/[a-z0-9]+$/.test(part)) return <Link key={`${k}-${i}`} href={part} className="linkb">Open ›</Link>;
       const l = part.match(/^\[([^\]]+)\]\(((?:\/|https?:\/\/)[^)\s]+)\)$/);
       if (l) return l[2].startsWith("/") ? <Link key={`${k}-${i}`} href={l[2]} className="linkb">{l[1]}</Link> : <a key={`${k}-${i}`} href={l[2]} target="_blank" rel="noreferrer" className="linkb">{l[1]}</a>;
       const b = part.match(/^\*\*([^*]+)\*\*$/);

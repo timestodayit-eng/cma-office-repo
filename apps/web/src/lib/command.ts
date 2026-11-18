@@ -241,6 +241,16 @@ const TOOLS: Tool[] = [
   },
 ];
 
+/**
+ * The model sometimes puts a made-up website in front of an in-app link. Keep only the in-app path,
+ * and drop any other web address it did not get from the app.
+ */
+export function cleanLinks(text: string) {
+  return text
+    .replace(/https?:\/\/[^\s/)\]]+(\/(?:tasks|interviews|logsheet|recruitment|broadcast|marketing|attendance|requests|settings|users)(?:[/?][^\s)\]]*)?)/gi, "$1")
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)\s]+\)/g, "$1");
+}
+
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
 function systemPrompt(u: U) {
@@ -253,7 +263,7 @@ How to work:
 - Answer only from what the tools return. If the tools do not have it, say so plainly; never make up names, numbers or dates.
 - Reply in the language the person writes in. Bangla written in English letters (Banglish) gets a simple Bangla reply. Keep replies short and plain; use a small list when there are several items.
 - Dates in replies: like 12 Dec. Money: BDT with a thousands comma.
-- When you mention a task or interview that has a link, write it as [title](link) so the person can open it.
+- When you mention a task or interview that has a link, write it as [title](link) with the link copied exactly as the tool gave it. Links start with / (for example /tasks/abc). Never put a website address or domain in front of a link and never invent a link.
 - Giving work: when the person clearly asks to give someone a task, create it. If the person, the work or the date is unclear, ask one short question first. After creating, say what was created, for whom and the due date.
 - A new interview needs the person's yes before it is created (see the tool).
 - A tool that is missing from your list means this person is not allowed to use that part of the app; say that they do not have that permission.
@@ -272,7 +282,7 @@ export async function runCommand(u: U, history: ChatTurn[], question: string): P
   const did: string[] = [];
   for (let i = 0; i < 8; i++) {
     const turn = await aiTurn(messages, defs);
-    if (!turn.toolCalls.length) return { text: turn.text || "…", did };
+    if (!turn.toolCalls.length) return { text: cleanLinks(turn.text || "…"), did };
     messages.push({ role: "assistant", content: turn.text, toolCalls: turn.toolCalls });
     for (const c of turn.toolCalls) {
       const tool = tools.find((t) => t.name === c.name);
