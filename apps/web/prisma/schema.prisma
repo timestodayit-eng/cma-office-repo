@@ -364,6 +364,10 @@ model Payslip {
   unpaidDays   Decimal? @db.Decimal(5, 1)
   bonus        Decimal  @default(0) @db.Decimal(12, 2)
   deduction    Decimal  @default(0) @db.Decimal(12, 2)
+  /// Overtime hours of the month, paid at basic / days / hours per day
+  overtimeHours Decimal @default(0) @db.Decimal(6, 1)
+  /// Made by "Add demo data"; removed with it
+  demo         Boolean  @default(false)
   note         String?
   /// Fixed copy of every figure, written when the month is finalised
   final        Json?

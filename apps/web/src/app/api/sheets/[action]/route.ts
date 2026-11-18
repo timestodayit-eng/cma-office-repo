@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
   }
   if (action === "backup") {
     try {
-      const tabs = await backupTabs();
+      const tabs = await backupTabs(body.full !== false);
       const url = typeof body.url === "string" && body.url.startsWith("https://docs.google.com/") ? body.url : undefined;
       await saveBackupInfo({ url, at: new Date().toISOString(), rows: tabs.reduce((n, t) => n + t.rows.length - 1, 0) });
       return NextResponse.json({ ok: true, tabs });
