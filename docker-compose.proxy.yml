@@ -1,0 +1,15 @@
+# Use when another Caddy on the VPS already owns ports 80/443.
+# Our own caddy is turned off; the web container joins that Caddy's network,
+# and that Caddy forwards  <domain> -> cma-office-web-1:3000.
+#   PROXY_NETWORK=<network of the existing caddy>  (put it in .env)
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+services:
+  web:
+    networks: [default, proxy]
+  caddy:
+    profiles: ["disabled"]
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-page-moderator-studio_default}
