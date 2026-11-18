@@ -227,3 +227,15 @@ table.sheet.log{table-layout:fixed;width:max-content}
 .sheet td.zero{color:var(--muted);opacity:.55}
 .sheet td.hit{background:var(--good-soft);color:var(--good);font-weight:600}
 .sheet tr.tot td{background:var(--panel2)}
+
+/* Command Center chat */
+.cc{display:flex;flex-direction:column;gap:10px;max-width:860px}
+.cc-log{display:flex;flex-direction:column;gap:8px;min-height:46vh;max-height:calc(100vh - 290px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.cc-empty{display:flex;flex-direction:column;gap:8px;margin:auto 0;align-items:flex-start}
+.cc-msg{max-width:86%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.cc-msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
+.cc-msg.assistant{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:4px;white-space:normal}
+.cc-msg.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.cc-msg.wait{color:var(--muted)}
+.cc-li{padding-left:14px;position:relative}.cc-li::before{content:"•";position:absolute;left:2px;color:var(--muted)}
+.cc-in{display:flex;gap:8px}.cc-in .inp{flex:1;min-width:0}

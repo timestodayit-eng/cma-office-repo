@@ -1,6 +1,8 @@
 "use server";
 
 import { sendWhatsApp } from "@/lib/whatsapp";
+import { runCommand, type ChatTurn } from "@/lib/command";
+import { AiError } from "@/lib/ai";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -385,4 +387,23 @@ export async function testWhatsAppAction(): Promise<{ ok?: string; e?: string }>
   if (!me?.whatsapp) return { e: "Add your WhatsApp number in Profile first" };
   const r = await sendWhatsApp(me.whatsapp, "Test message. WhatsApp is connected");
   return r.ok ? { ok: `Sent to ${me.whatsapp}. Check your WhatsApp.` } : { e: `Not sent: ${r.error}` };
+}
+
+/* ---------- Command Center ---------- */
+
+export async function askCommandAction(history: ChatTurn[], question: string): Promise<{ text?: string; e?: string }> {
+  const u = await requireUser();
+  if (!u.can("ai")) return { e: "You do not have the Command Center" };
+  const q = (question ?? "").trim();
+  if (!q) return { e: "Write a question or a command" };
+  try {
+    const safe = (Array.isArray(history) ? history : []).filter((h) => (h?.role === "user" || h?.role === "assistant") && typeof h.content === "string");
+    const r = await runCommand(u, safe, q);
+    if (r.did.length) revalidatePath("/", "layout");
+    return { text: r.text };
+  } catch (err) {
+    if (err instanceof AiError) return { e: err.message };
+    console.error("command center", err);
+    return { e: "Something went wrong. Please try again." };
+  }
 }
