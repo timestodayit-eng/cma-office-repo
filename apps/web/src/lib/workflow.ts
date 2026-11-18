@@ -100,10 +100,14 @@ export async function createInterview(input: {
       await tx.broadcastSlot.create({ data: { interviewId: interview.id, slot: b.slot, callDate: b.date } });
     }
 
-    // Log Sheet backup row, on the day tab the work starts.
+    // Log Sheet backup row, on today's day tab (Dhaka), like a new entry in the sheet.
+    const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
+    const dayCount = await tx.logRow.count({ where: { date: new Date(todayIso) } });
     await tx.logRow.create({
       data: {
-        date: plan.writerStart,
+        date: new Date(todayIso),
+        rowIndex: dayCount,
+        sn: dayCount + 1,
         title: `${company.short} ${input.country} interview ${plan.interviewDate.toISOString().slice(0, 10)}`,
         company: company.name,
         mainCategory: "Interview & Conversion",

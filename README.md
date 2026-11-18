@@ -18,7 +18,7 @@ mobile https://claude.ai/artifact/GT3ZTFdJte3irjSCsg1e7a · web https://claude.a
 
 ## Phases
 
-1. **Backend + web** (in progress): login, users, levels, module access, responsibilities, settings, New interview → automatic chain (script → approve → shoot slot → shoot → raw upload → edit → QC → handover → publish → ads) with Start / Done & hand over / QC pass-fail / Already done, requests, notifications, Log Sheet backup row. Still to come in phase 1: Log Sheet, Recruitment and Broadcast screens, data import.
+1. **Backend + web** (in progress): login, users, levels, module access, responsibilities, settings, New interview → automatic chain (script → approve → shoot slot → shoot → raw upload → edit → QC → handover → publish → ads) with Start / Done & hand over / QC pass-fail / Already done, requests, notifications, Log Sheet backup row. Log Sheet (day tabs, Status_Check, Report), Recruitment Command Center, Call & SMS Broadcast, one-time import of the existing sheet data.
 2. Google Sheets two-way sync (interview list, log sheet, Banglalink call panel) + WhatsApp Business notifications.
 3. Mobile app + attendance (office WiFi / location).
 4. Desktop app + Work Monitor (consent, visible indicator, only while checked in).
@@ -52,6 +52,15 @@ cp .env.example .env && nano .env      # DB_PASSWORD, SESSION_SECRET (openssl ra
 # 2. start (also used for every update after git pull)
 docker compose up -d --build
 ```
+
+Import the existing sheet data once (interviews, broadcast panel, all log sheet days):
+
+```bash
+docker compose cp sheet-snapshot.json web:/tmp/snap.json
+docker compose exec web sh -c 'cd apps/web && ./node_modules/.bin/tsx prisma/import-snapshot.ts /tmp/snap.json'
+```
+
+The snapshot file is kept in the project's private files, not in this repository.
 
 Point the domain's DNS A record at the VPS IP; Caddy gets the HTTPS certificate by itself.
 Database backups are written daily to `./backups` (14 days kept).
