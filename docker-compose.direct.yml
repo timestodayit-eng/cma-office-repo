@@ -1,0 +1,12 @@
+# Use when another program on the VPS already owns ports 80/443 (another proxy/site).
+# Runs the app on http://<VPS-IP>:3000 without its own HTTPS proxy:
+#   docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d
+# Plain HTTP is for testing only; put it behind the existing proxy with HTTPS for real use.
+services:
+  web:
+    ports:
+      - "3000:3000"
+    environment:
+      INSECURE_COOKIES: "1"
+  caddy:
+    profiles: ["disabled"]
