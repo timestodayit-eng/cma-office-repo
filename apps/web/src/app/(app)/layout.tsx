@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { LEVEL_LABEL, type Level } from "@cma/core";
+import { LEVEL_LABEL, ALL_RESPONSIBILITIES, type Level } from "@cma/core";
+
+const RESP_LABEL: Record<string, string> = Object.fromEntries(ALL_RESPONSIBILITIES.map((r) => [r.key, r.label]));
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { initials } from "@/lib/format";
-import { SideNav, MobileNav, ThemeButton, type NavItem } from "@/components/Nav";
+import { SideNav, MobileNav, ThemeButton, Icon, type NavItem } from "@/components/Nav";
+import { myBroadcastCount } from "@/lib/broadcast";
 import { logoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -16,20 +19,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     prisma.notification.count({ where: { userId: u.id, readAt: null } }),
   ]);
 
+  const [bcTodo] = await Promise.all([u.can("broadcast") ? myBroadcastCount(u.id) : 0]);
   const items: NavItem[] = [
-    { href: "/", label: "Home", icon: "🏠" },
-    { href: "/tasks", label: "My Tasks", icon: "✅", count: myTodo },
-    { href: "/requests", label: "Requests", icon: "💬", count: openReq },
+    { href: "/", label: "Home", icon: "home" },
+    { href: "/tasks", label: "My Tasks", icon: "tasks", count: myTodo },
+    { href: "/command", label: "Command", icon: "command" },
+    { href: "/profile", label: "Profile", icon: "profile" },
   ];
   const mods: [Parameters<typeof u.can>[0], NavItem][] = [
-    ["interviews", { href: "/interviews", label: "Interviews", icon: "📅" }],
-    ["logsheet", { href: "/logsheet", label: "Log Sheet", icon: "📄" }],
-    ["recruitment", { href: "/recruitment", label: "Recruitment", icon: "📊" }],
-    ["broadcast", { href: "/broadcast", label: "Call & SMS Broadcast", icon: "📞" }],
-    ["users", { href: "/users", label: "Users & Permissions", icon: "👥" }],
-    ["settings", { href: "/settings", label: "Settings", icon: "⚙️" }],
+    ["logsheet", { href: "/logsheet", label: "Log Sheet", icon: "sheet" }],
+    ["marketing", { href: "/marketing", label: "Marketing", icon: "marketing" }],
+    ["broadcast", { href: "/broadcast", label: "Broadcast", icon: "broadcast", count: bcTodo }],
+    ["recruitment", { href: "/recruitment", label: "Recruitment", icon: "recruit" }],
+    ["users", { href: "/users", label: "Users & Permissions", icon: "users" }],
+    ["requests", { href: "/requests", label: "Requests", icon: "requests", count: openReq }],
+    ["settings", { href: "/settings", label: "Settings", icon: "settings" }],
+    ["attendance", { href: "/attendance", label: "Attendance", icon: "attendance" }],
+    ["payroll", { href: "/payroll", label: "Payroll", icon: "payroll" }],
+    ["performance", { href: "/performance", label: "Performance", icon: "performance" }],
+    ["monitor", { href: "/monitor", label: "Work Monitor", icon: "monitor" }],
   ];
   for (const [m, item] of mods) if (u.can(m)) items.push({ ...item, section: "Modules" });
+  // Short header line: only the working roles, not every permission.
+  const SHOW = ["ads", "broadcast_officer", "writer", "model", "editor", "qc", "creative_lead", "content_director", "cinematographer", "uploader"];
+  const duties = SHOW.filter((k) => u.resp.has(k as never)).map((k) => RESP_LABEL[k]?.split(" (")[0].split(" / ")[0]).filter(Boolean).slice(0, 2);
 
   return (
     <div className="shell">
@@ -37,21 +50,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="main">
         <header className="top">
           <Link href="/profile" className="av" aria-label="Profile">{initials(u.name)}</Link>
-          <div className="who"><b>{u.name}</b><span>{LEVEL_LABEL[u.level as Level]}{u.designation ? ` · ${u.designation}` : ""}</span></div>
+          <div className="who"><b>{u.name}</b><span>{[LEVEL_LABEL[u.level as Level], ...(duties.length ? duties : [u.designation])].filter(Boolean).join(" · ")}</span></div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-            <Link href="/notifications" className="iconbtn" aria-label="Notifications">🔔{unread > 0 && <span className="dot">{unread}</span>}</Link>
+            <Link href="/attendance" className="att"><span className="dot" /><b>Attendance</b><span>· starts with the mobile app</span></Link>
+            <Link href="/notifications" className="iconbtn" aria-label="Notifications"><Icon name="bell" />{unread > 0 && <span className="dot">{unread}</span>}</Link>
             <ThemeButton />
-            <form action={logoutAction}><button className="iconbtn" aria-label="Log out" title="Log out">⎋</button></form>
+            <form action={logoutAction}><button className="iconbtn" aria-label="Log out" title="Log out"><Icon name="logout" /></button></form>
           </span>
         </header>
         <main className="screen">{children}</main>
       </div>
       <MobileNav items={[
-        { href: "/", label: "Home", icon: "🏠" },
-        { href: "/tasks", label: "Tasks", icon: "✅" },
-        { href: "/interviews", label: "Interviews", icon: "📅" },
-        { href: "/requests", label: "Requests", icon: "💬" },
-        { href: "/more", label: "More", icon: "▦" },
+        { href: "/", label: "Home", icon: "home" },
+        { href: "/tasks", label: "My Tasks", icon: "tasks" },
+        { href: "/command", label: "Command", icon: "command" },
+        { href: "/more", label: "Modules", icon: "modules" },
+        { href: "/profile", label: "Profile", icon: "profile" },
       ]} />
     </div>
   );

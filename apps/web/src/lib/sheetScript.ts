@@ -60,7 +60,7 @@ function values_(sh) {
 }
 
 function post_(path, payload) {
-  payload.secret = KEY; payload.sheet = SHEET;
+  payload.secret = KEY; payload.sheet = SHEET; payload.url = SpreadsheetApp.getActive().getUrl();
   var res = UrlFetchApp.fetch(APP + '/api/sheets/' + path, {
     method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true
   });

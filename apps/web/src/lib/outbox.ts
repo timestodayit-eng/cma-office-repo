@@ -10,7 +10,7 @@ export type SheetKind = "recruitment" | "broadcast" | "log";
 
 export type SheetConfig = {
   secret: string;
-  last?: Partial<Record<SheetKind, { at: string; tab: string; summary: string }>>;
+  last?: Partial<Record<SheetKind, { at: string; tab: string; summary: string; url?: string }>>;
   lastSend?: Partial<Record<SheetKind, { at: string; ok: boolean; error?: string }>>;
 };
 

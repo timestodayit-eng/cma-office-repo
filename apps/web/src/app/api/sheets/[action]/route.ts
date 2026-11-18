@@ -105,7 +105,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
     }
     if (done.length) {
       await patchSheetConfig((c) => {
-        (c.last ??= {})[sheet] = { at: new Date().toISOString(), tab: tabs.length === 1 ? tabs[0].tab : `${done.length} tabs`, summary: done.slice(0, 6).join(" · ") };
+        const url = typeof body.url === "string" && body.url.startsWith("https://docs.google.com/") ? body.url : c.last?.[sheet]?.url;
+        (c.last ??= {})[sheet] = { url, at: new Date().toISOString(), tab: tabs.length === 1 ? tabs[0].tab : `${done.length} tabs`, summary: done.slice(0, 6).join(" · ") };
       });
       revalidatePath("/", "layout");
     }
