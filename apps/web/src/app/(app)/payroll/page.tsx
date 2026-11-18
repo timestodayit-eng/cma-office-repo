@@ -4,7 +4,7 @@ import { requireModule } from "@/lib/auth";
 import { initials, todayDhaka } from "@/lib/format";
 import { paySheet, monthOf, validMonth, type PayLine } from "@/lib/payroll";
 import { Flash } from "@/components/TaskCard";
-import { payEditLineAction, payFinaliseAction, paySavePersonAction, paySaveRulesAction } from "@/app/payActions";
+import { payEditLineAction, payFinaliseAction, paySavePersonAction, paySaveRulesAction, payDemoAction } from "@/app/payActions";
 
 const tk = (n: number) => "৳" + Math.round(n).toLocaleString("en-US");
 const monthLabel = (m: string) => new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(m + "-01T00:00:00Z"));
@@ -68,6 +68,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
   if (tab === "setup") {
     const [{ rules }, people] = await Promise.all([paySheet(month), prisma.user.findMany({ where: { active: true, external: false }, orderBy: { name: "asc" } })]);
     const set = people.filter((p) => rules.people[p.id]).length;
+    const demoCount = Object.values(rules.people).filter((p) => p.note === "DEMO").length;
     return (
       <>
         <h1 className="h1">Payroll</h1>
@@ -103,6 +104,14 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
             );
           })}
         </div>
+        <form action={payDemoAction} className="card">
+          <b>Demo data</b> {demoCount > 0 && <span className="pill p-amber">{demoCount} demo salaries in use</span>}
+          <p className="hint">To see how the salary sheet and the Google Sheet backup look before the real figures are in: this gives a demo salary to everyone who has none, and demo attendance for the past days of this month. Everything is marked DEMO and real entries are never changed.</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn sm" name="mode" value="fill">Add demo data</button>
+            <button className="btn sm" name="mode" value="clear">Remove demo data</button>
+          </div>
+        </form>
         <form action={paySaveRulesAction} className="card">
           <b>Rules for everyone</b>
           <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
@@ -118,7 +127,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
     );
   }
 
-  const { lines, countFrom } = await paySheet(month);
+  const { lines, countFrom, rules } = await paySheet(month);
   const withPay = lines.filter((l) => l.hasPay || l.status === "FINAL");
   const allFinal = withPay.length > 0 && withPay.every((l) => l.status === "FINAL");
   const total = withPay.reduce((a, l) => a + l.net, 0);
@@ -133,6 +142,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
         <div className="stat"><b>{withPay.length}<small> / {lines.length}</small></b><span>People with salary set</span></div>
         <div className="stat"><b>{allFinal ? "Final" : "Draft"}</b><span>{monthLabel(month)}</span></div>
       </div>
+      {Object.values(rules.people).some((p) => p.note === "DEMO") && <div className="warn"><b>Demo figures.</b> Some salaries and attendance days here are demo data. Remove them in <Link href="/payroll?tab=setup" className="linkb">Salary setup</Link> before the real payroll.</div>}
       {lines.length > withPay.length && <div className="warn">{lines.length - withPay.length} people have no salary set yet. Set it in <Link href="/payroll?tab=setup" className="linkb">Salary setup</Link>.</div>}
       {!countFrom && <p className="hint">Nobody has checked in yet, so no absent days are counted.</p>}
       <div className="card" style={{ gap: 0, padding: 0 }}>

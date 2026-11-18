@@ -119,6 +119,7 @@ function cmaBackup() {
     });
     var out;
     try { out = JSON.parse(res.getContentText()); } catch (e) { throw new Error('CMA Office did not answer (' + res.getResponseCode() + ')'); }
+    if (!out.ok && /Unknown sheet|Unknown action/.test(out.error || '')) throw new Error('The app on the server is an old version. Run update.sh on the server, then run cmaBackupConnect again.');
     if (!out.ok) throw new Error(out.error || 'CMA Office refused');
     var total = 0;
     out.tabs.forEach(function (t, i) {
