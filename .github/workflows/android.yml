@@ -1,0 +1,54 @@
+# Builds the CMA Office Android app (APK) and puts it on the "Android app" release page,
+# so it can be downloaded to a phone. Runs when the mobile app changes, or by hand.
+name: Android app
+
+on:
+  push:
+    branches: [main, phase-1-backend-web]
+    paths: ["mobile/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-app
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Make the Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Build the APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Name the file
+        run: cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/CMA-Office.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CMA-Office-apk
+          path: ${{ runner.temp }}/CMA-Office.apk
+      - name: Put it on the release page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "CMA Office Android app" --notes "Latest build of the CMA Office Android app. Download CMA-Office.apk on the phone and install it." --prerelease
+          gh release upload android-latest "$RUNNER_TEMP/CMA-Office.apk" --clobber
