@@ -31,11 +31,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const simple = mgr ? await prisma.task.findMany({ where: { chain: null, status: { in: ["TODO", "IN_PROGRESS"] } }, include: { assignee: true }, orderBy: { dueDate: "asc" }, take: 20 }) : [];
   const late = open.filter((t) => t.dueDate && t.dueDate < today).length;
 
+  // The newest notice of the last 7 days stays on top of Home, also after it was ticked as read.
+  const notice = await prisma.notice.findFirst({
+    where: { createdAt: { gte: new Date(Date.now() - 7 * 86400_000) }, OR: [{ senderId: u.id }, { reads: { some: { userId: u.id } } }] },
+    orderBy: { createdAt: "desc" }, include: { sender: { select: { name: true } } },
+  });
   return (
     <>
       {sp.denied && <div className="err">You do not have access to that module.</div>}
       <div><div className="hint">Shuprobhat,</div><h1 className="h1">{u.shortName ?? u.name} 👋</h1></div>
       <Flash sp={sp} />
+      {notice && (
+        <Link href="/notices" className="card" style={{ borderColor: "var(--pri)", background: "var(--pri-soft)", gap: 4 }}>
+          <span className="small muted">Notice · {notice.sender.name} · {fmtTime(notice.createdAt)}</span>
+          <b style={{ overflowWrap: "anywhere" }}>{notice.title}</b>
+          <span className="small" style={{ overflowWrap: "anywhere" }}>{notice.body.length > 140 ? notice.body.slice(0, 140) + "…" : notice.body}</span>
+        </Link>
+      )}
       <div className="stats three">
         <Link href="/tasks" className="stat"><b>{open.length}</b><span>My turn</span></Link>
         <Link href="/tasks?tab=coming" className="stat"><b>{coming.length}</b><span>Coming next</span></Link>

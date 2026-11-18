@@ -53,6 +53,8 @@ model User {
   interviews       Interview[]        @relation("createdBy")
   attendance       Attendance[]
   payslips         Payslip[]
+  noticesSent      Notice[]
+  noticeReads      NoticeRead[]
 }
 
 model ModulePermission {
@@ -378,4 +380,32 @@ model Payslip {
 
   @@unique([userId, month])
   @@index([month])
+}
+
+/// A notice from the CEO / admin to the whole team, a team, a company's people or chosen people.
+model Notice {
+  id        String   @id @default(cuid())
+  senderId  String
+  title     String
+  body      String
+  /// Who it was sent to, in words ("Everyone", "Production team", ...)
+  audience  String
+  createdAt DateTime @default(now())
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reads     NoticeRead[]
+
+  @@index([createdAt])
+}
+
+/// One row per person who got the notice; readAt is set when they tick "Yes, I have read it".
+model NoticeRead {
+  id       String    @id @default(cuid())
+  noticeId String
+  userId   String
+  readAt   DateTime?
+  notice   Notice    @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, userId])
+  @@index([userId, readAt])
 }
