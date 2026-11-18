@@ -41,7 +41,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <b>Google Sheets connection ›</b>
         <span className="hint">Connect the three sheets two-way, see when they last synced, upload old data.</span>
       </Link>
-      {u.can("attendance", "EDIT") && (
+      {u.has("attendance") && (
         <Link href="/attendance?tab=rules" className="card linkcard">
           <b>Attendance rules and office WiFi ›</b>
           <span className="hint">Office time, late minutes, weekly off day, and the office WiFi router used for check-in.</span>

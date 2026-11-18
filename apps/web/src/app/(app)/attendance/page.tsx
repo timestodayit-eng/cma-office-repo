@@ -13,7 +13,8 @@ const hhmm = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-GB", { timeZon
 export default async function Attendance({ searchParams }: { searchParams: Promise<{ tab?: string; day?: string; e?: string; ok?: string }> }) {
   const u = await requireModule("attendance");
   const sp = await searchParams;
-  const admin = u.can("attendance", "EDIT");
+  // Team view, corrections, rules and office WiFi: only the people with the "Attendance admin" duty (and super admins).
+  const admin = u.has("attendance");
   const tab = (sp.tab === "team" || sp.tab === "rules") && admin ? sp.tab : "me";
   const today = todayDhaka();
   const rules = await getAttRules();

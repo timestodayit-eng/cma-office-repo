@@ -12,7 +12,7 @@ const back = (tab: string, msg: { e?: string; ok?: string }): never =>
 
 async function admin() {
   const u = await requireUser();
-  if (!u.can("attendance", "EDIT")) throw new AttError("Only HR / admin can do this");
+  if (!u.has("attendance")) throw new AttError("Only HR / admin can do this");
   return u;
 }
 const fail = (err: unknown) => {
