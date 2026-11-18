@@ -19,7 +19,7 @@ export default async function WhatsAppSettings() {
       <h1 className="h1">WhatsApp connection</h1>
       <div className="card">
         <div className="row"><b className="grow">Office WhatsApp number</b><span className={`pill ${on ? "p-good" : "p-amber"}`}>{on ? "Connected" : "Not connected yet"}</span></div>
-        <p className="hint">Every task, request and QC note in the app also goes to the person's WhatsApp, from one office number.</p>
+        <p className="hint">Every task, request and QC note in the app also goes to the person&apos;s WhatsApp, from one office number.</p>
         <div className="small">{withNumber} of {total} people have a WhatsApp number · {sent} sent · {failed} failed</div>
         {on && u.can("settings", "EDIT") && <WhatsAppTest />}
       </div>
@@ -27,7 +27,7 @@ export default async function WhatsAppSettings() {
         <b>How to connect (one time)</b>
         <ol className="alist">
           <li>Keep one SIM for the office that is <b>not</b> used in the WhatsApp app on any phone.</li>
-          <li>Open <b>business.facebook.com</b> and use the company's Meta Business account (the one that runs the ads).</li>
+          <li>Open <b>business.facebook.com</b> and use the company&apos;s Meta Business account (the one that runs the ads).</li>
           <li>Open <b>developers.facebook.com → My Apps → Create App → Business</b>, then add the product <b>WhatsApp</b>.</li>
           <li>In <b>WhatsApp → API Setup</b>, add the office number and confirm it with the SMS code. Note the <b>Phone number ID</b> shown there.</li>
           <li>In <b>WhatsApp Manager → Message templates</b>, create a template: name <code>{WA_TEMPLATE}</code>, category <b>Utility</b>, language <b>English</b>, body exactly:<br /><code>{WA_TEMPLATE_TEXT}</code><br />Sample for {"{{1}}"}: <i>Write script, Malaysia F 01, due 26 Nov</i>. Approval usually takes a few minutes to a day.</li>
