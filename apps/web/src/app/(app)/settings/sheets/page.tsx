@@ -57,13 +57,14 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
       {admin && (
         <div className="card">
           <b>How to connect a sheet (once per sheet, about 2 minutes)</b>
+          <p className="warn"><b>Do not delete the scripts the sheet already has.</b> This script is added as a new file beside them. Your Automation menu, daily tabs, reports and duplicate check keep working as before.</p>
           <ol className="alist">
             <li>Press <b>Copy script for this sheet</b> above.</li>
-            <li>Open that Google Sheet with the owner account. Menu <b>Extensions → Apps Script</b>.</li>
-            <li>Press <b>+</b> beside Files → <b>Script</b>, name it <b>CMAOffice</b>. Delete what is inside, paste, press Save (💾).</li>
-            <li>Go back to the sheet and reload the page. A new menu <b>CMA Office</b> appears at the top.</li>
-            <li>Menu <b>CMA Office → 1. Connect</b>. Google asks for permission: choose your account → Advanced → Go to (unsafe) → <b>Allow</b>. Then press <b>1. Connect</b> one more time.</li>
-            <li>A box says how many tabs were sent. This page then shows <b>Connected</b>.</li>
+            <li>Open that Google Sheet with the owner account. Menu <b>Extensions → Apps Script</b>. Leave the code you see there as it is.</li>
+            <li>On the left, press <b>+</b> beside Files → <b>Script</b>. Name the new file <b>CMAOffice</b>.</li>
+            <li>Only inside this new file: remove the three sample lines (<code>function myFunction…</code>), paste, press Save (💾).</li>
+            <li>At the top of the editor choose the function <b>cmaConnect</b> and press <b>▶ Run</b>. Google asks for permission: choose your account → Advanced → Go to (unsafe) → <b>Allow</b>.</li>
+            <li>This page then shows <b>Connected</b>. When you reload the sheet, a new menu <b>CMA Office</b> appears next to your own menus.</li>
           </ol>
           <p className="hint">Keep the script private: it holds this app&apos;s key. Do not rename the tabs or move the columns of the three sheets without telling, or the sync cannot find them.</p>
         </div>
