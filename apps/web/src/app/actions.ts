@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { createSession, destroySession, verifyPassword, requireUser, normalizePhone } from "@/lib/auth";
 import {
   createInterview,
+  attachChain,
   startTask,
   completeTask,
   failReview,
@@ -19,6 +20,7 @@ import {
   WorkflowError,
 } from "@/lib/workflow";
 import { notify } from "@/lib/notify";
+import { importSnapshot } from "@/lib/dataImport";
 
 const s = (f: FormData, k: string) => (f.get(k)?.toString() ?? "").trim();
 
@@ -335,4 +337,33 @@ export async function saveSettingsAction(f: FormData) {
   });
   revalidatePath("/settings");
   back("/settings", { ok: "Settings saved. New interviews use these." });
+}
+
+/* ---------- old data upload ---------- */
+
+export async function uploadSnapshotAction(f: FormData) {
+  const u = await requireUser();
+  if (u.level !== "SUPER_ADMIN" || !u.can("settings", "EDIT")) redirect("/?denied=settings");
+  const file = f.get("file");
+  if (!(file instanceof File) || !file.size) back("/settings/sheets", { e: "Choose the data file first" });
+  let snap: Parameters<typeof importSnapshot>[0];
+  try {
+    snap = JSON.parse(await (file as File).text());
+    if (typeof snap !== "object" || !snap || !("recruitment" in snap || "log" in snap || "broadcast" in snap)) throw new Error();
+  } catch {
+    back("/settings/sheets", { e: "This is not the CMA data file" });
+  }
+  const r = await importSnapshot(snap!);
+  await prisma.auditLog.create({ data: { userId: u.id, action: "import", entity: "snapshot", data: r } });
+  revalidatePath("/", "layout");
+  back("/settings/sheets", { ok: `Imported ${r.interviews} interviews, ${r.slots} call days, ${r.logRows} log rows.` });
+}
+
+export async function startTimelineAction(f: FormData) {
+  const u = await requireUser();
+  const id = s(f, "id");
+  if (!u.can("interviews", "EDIT")) back(`/interviews/${id}`, { e: "You cannot start timelines" });
+  await attachChain(id, { createdById: u.id });
+  revalidatePath("/", "layout");
+  back(`/interviews/${id}`, { ok: "Timeline started. The writer has been told." });
 }

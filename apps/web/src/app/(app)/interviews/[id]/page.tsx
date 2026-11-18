@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { fmtDay, fmtTime, todayDhaka, dueLabel } from "@/lib/format";
 import { Flash } from "@/components/TaskCard";
+import { startTimelineAction } from "@/app/actions";
 
 export default async function InterviewPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; ok?: string }> }) {
   const u = await requireModule("interviews");
@@ -39,6 +40,13 @@ export default async function InterviewPage({ params, searchParams }: { params: 
       <div className="grid">
         <div className="card">
           <b>Video timeline</b>
+          {!iv.tasks.length && (
+            <form action={startTimelineAction} className="empty">
+              <input type="hidden" name="id" value={iv.id} />
+              <span>This interview came from the Google Sheet and has no video timeline yet.</span>
+              {u.can("interviews", "EDIT") && <button className="btn primary sm">Start the video timeline</button>}
+            </form>
+          )}
           <ol className="steps">
             {iv.tasks.map((t) => {
               const open = t.status === "TODO" || t.status === "IN_PROGRESS";

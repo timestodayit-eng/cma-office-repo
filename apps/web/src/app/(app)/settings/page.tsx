@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { getTimelineSettings } from "@/lib/workflow";
@@ -36,6 +37,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
     <>
       <h1 className="h1">Settings</h1>
       <Flash sp={sp} />
+      <Link href="/settings/sheets" className="card linkcard">
+        <b>Google Sheets connection ›</b>
+        <span className="hint">Connect the three sheets two-way, see when they last synced, upload old data.</span>
+      </Link>
       <form action={saveSettingsAction} className="stack">
         <fieldset disabled={!u.can("settings", "EDIT")} style={{ border: 0, padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="card">

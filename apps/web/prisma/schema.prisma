@@ -126,6 +126,10 @@ model Interview {
   leads            Int?
   topUpRequired    Boolean  @default(false)
   notes            String?
+  workType         String?
+  details          String?
+  /** Banglalink panel: FIRST / SECOND / SINGLE (bridge pairs). */
+  broadcastType    String?
   /** Sheet sync: tab + row id so two-way sync can find it again. */
   sheetRef      String?   @unique
   bridgeWithId  String?
@@ -305,4 +309,20 @@ model AuditLog {
   entityId  String?
   data      Json?
   createdAt DateTime @default(now())
+}
+
+/// Changes made in the app waiting to be written to a Google Sheet (two-way sync).
+model SheetOutbox {
+  id        String    @id @default(cuid())
+  sheet     String    // recruitment | broadcast | log
+  /** Entity key (sheetRef) so a sheet push does not overwrite a newer app change. */
+  ref       String?
+  op        Json
+  tries     Int       @default(0)
+  lastError String?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@index([sentAt, sheet])
+  @@index([ref])
 }

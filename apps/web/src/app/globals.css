@@ -133,3 +133,10 @@ table.tbl{border-collapse:separate;border-spacing:0;font-size:12.5px;width:100%}
 .rmsg{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px}
 .login{min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg)}
 .login .card{width:min(380px,100%)}
+.back{color:var(--pri);font-weight:500;font-size:13px}
+.linkcard{color:var(--ink);gap:2px}
+.linkcard:hover{border-color:var(--pri)}
+.alist{margin:0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.copybox{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.copybox details{width:100%;font-size:12px;color:var(--muted)}
+.copybox textarea{width:100%;margin-top:6px;font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--panel2);color:var(--ink)}

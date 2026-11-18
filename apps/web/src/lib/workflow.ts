@@ -8,11 +8,13 @@ import {
   broadcastDays,
   DEFAULT_TIMELINE,
   stepIndex,
+  toDay,
   type StepKey,
   type TimelineSettings,
 } from "@cma/core";
 import { prisma } from "./db";
 import { notify } from "./notify";
+import { enqueue, queueLogRow, queueLogRowsWhere, nextLogIndex } from "./outbox";
 
 type Tx = Prisma.TransactionClient;
 
@@ -56,31 +58,63 @@ export async function createInterview(input: {
   notes?: string | null;
   createdById: string;
 }) {
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: input.companyId } });
+  const date = toDay(input.interviewDate);
+  const iso = date.toISOString().slice(0, 10);
+  const title = input.title || `${company.name} · ${input.country}`;
+  // Same key the sheet sync uses, so the row coming back from the sheet is this interview.
+  const base = `rec:${company.short}:${iso}:${title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+  let sheetRef = base;
+  for (let n = 2; await prisma.interview.findUnique({ where: { sheetRef } }); n++) sheetRef = `${base}:${n}`;
+  const interview = await prisma.interview.create({
+    data: {
+      companyId: input.companyId,
+      country: input.country,
+      interviewDate: date,
+      title,
+      marketingPlanUsd: input.marketingPlanUsd ?? undefined,
+      notes: input.notes ?? undefined,
+      details: input.notes ?? undefined,
+      createdById: input.createdById,
+      sheetRef,
+    },
+  });
+  const tab = company.sheetTab ?? company.name;
+  await enqueue(prisma, "recruitment", sheetRef, {
+    type: "rec.append", tab,
+    values: { agency: company.name, co: title, country: input.country, date: iso, mplan: input.marketingPlanUsd ?? "", details: input.notes ?? "" },
+  });
+  await attachChain(interview.id, { createdById: input.createdById });
+  const slots = await prisma.broadcastSlot.findMany({ where: { interviewId: interview.id }, orderBy: { slot: "asc" } });
+  await enqueue(prisma, "broadcast", `bcrow:${interview.id}`, {
+    type: "bc.append", tab,
+    values: { agency: company.name, co: title, country: input.country, date: iso, days: slots.map((b) => b.callDate.toISOString().slice(0, 10)) },
+  });
+  return interview;
+}
+
+/**
+ * Start the video timeline for an interview: the chain of tasks, the call broadcast
+ * days (if it has none yet) and the Log Sheet row. Used for interviews made in the
+ * app and for new future interviews typed into the Google Sheet.
+ */
+export async function attachChain(interviewId: string, opts: { createdById?: string; fromSheet?: boolean } = {}) {
   const result = await prisma.$transaction(async (tx) => {
+    const interview = await tx.interview.findUniqueOrThrow({ where: { id: interviewId }, include: { company: true } });
+    if (await tx.task.count({ where: { interviewId } })) return null;
     const settings = await getTimelineSettings(tx);
-    const company = await tx.company.findUniqueOrThrow({ where: { id: input.companyId } });
-    const plan = planTimeline(input.interviewDate, settings);
-    const interview = await tx.interview.create({
-      data: {
-        companyId: input.companyId,
-        country: input.country,
-        interviewDate: plan.interviewDate,
-        title: input.title || `${company.name} · ${input.country}`,
-        marketingPlanUsd: input.marketingPlanUsd ?? undefined,
-        notes: input.notes ?? undefined,
-        createdById: input.createdById,
-      },
-    });
+    const company = interview.company;
+    const plan = planTimeline(interview.interviewDate, settings);
 
     let firstAssignee: string | null = null;
     for (const step of plan.steps) {
-      const holders = await roleHolders(tx, step.role, input.companyId);
+      const holders = await roleHolders(tx, step.role, company.id);
       const assigneeId = step.pool ? null : holders[0] ?? null;
       if (step.order === 1) firstAssignee = assigneeId;
       await tx.task.create({
         data: {
-          interviewId: interview.id,
-          companyId: input.companyId,
+          interviewId,
+          companyId: company.id,
           chain: "video",
           stepKey: step.key,
           order: step.order,
@@ -91,44 +125,45 @@ export async function createInterview(input: {
           status: step.order === 1 ? "TODO" : "WAITING",
           startDate: step.startDate,
           dueDate: step.dueDate,
-          events: { create: { type: "created", userId: input.createdById } },
+          events: { create: { type: "created", userId: opts.createdById ?? null } },
         },
       });
     }
 
-    for (const b of broadcastDays(plan.interviewDate)) {
-      await tx.broadcastSlot.create({ data: { interviewId: interview.id, slot: b.slot, callDate: b.date } });
+    if (!(await tx.broadcastSlot.count({ where: { interviewId } }))) {
+      for (const b of broadcastDays(plan.interviewDate)) {
+        await tx.broadcastSlot.create({ data: { interviewId, slot: b.slot, callDate: b.date } });
+      }
     }
 
-    // Log Sheet backup row, on today's day tab (Dhaka), like a new entry in the sheet.
-    const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
-    const dayCount = await tx.logRow.count({ where: { date: new Date(todayIso) } });
-    await tx.logRow.create({
+    // Log Sheet row on today's day tab (Dhaka), like a new entry in the sheet.
+    const today = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date()));
+    const rowIndex = await nextLogIndex(tx, today);
+    const row = await tx.logRow.create({
       data: {
-        date: new Date(todayIso),
-        rowIndex: dayCount,
-        sn: dayCount + 1,
-        title: `${company.short} ${input.country} interview ${plan.interviewDate.toISOString().slice(0, 10)}`,
+        date: today,
+        rowIndex,
+        sn: (await tx.logRow.count({ where: { date: today, title: { not: null } } })) + 1,
+        title: `${company.short} ${interview.title ?? interview.country} interview ${plan.interviewDate.toISOString().slice(0, 10)}`,
         company: company.name,
         mainCategory: "Interview & Conversion",
         contentType: "Interview",
         priority: "High",
         deadline: plan.handover.toISOString().slice(0, 10),
         status: LOG_STATUS.script,
-        taskId: interview.id,
+        taskId: interviewId,
       },
     });
-
+    await queueLogRow(tx, row, true);
     return { interview, firstAssignee, plan };
   });
-
+  if (!result) return;
   await notify([result.firstAssignee], {
     kind: "task",
     title: `New interview video: ${result.interview.title}`,
-    body: `Script due ${result.plan.steps[0].dueDate.toISOString().slice(0, 10)}. If the video already exists, tap "Already done".`,
-    link: `/interviews/${result.interview.id}`,
+    body: `${opts.fromSheet ? "Added in the Google Sheet. " : ""}Script due ${result.plan.steps[0].dueDate.toISOString().slice(0, 10)}. If the video already exists, tap "Already done".`,
+    link: `/interviews/${interviewId}`,
   });
-  return result.interview;
 }
 
 type Actor = { id: string; level: string; has: (r: string) => boolean };
@@ -156,6 +191,7 @@ async function logEvent(tx: Tx, taskId: string, userId: string, type: string, no
 async function syncLogRow(tx: Tx, interviewId: string | null, status: string, patch: Prisma.LogRowUpdateManyMutationInput = {}) {
   if (!interviewId) return;
   await tx.logRow.updateMany({ where: { taskId: interviewId }, data: { status, ...patch } });
+  await queueLogRowsWhere(tx, { taskId: interviewId });
 }
 
 export async function startTask(taskId: string, actor: Actor) {

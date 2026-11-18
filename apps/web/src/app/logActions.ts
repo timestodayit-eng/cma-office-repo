@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { enqueue, queueLogRow, nextLogIndex } from "@/lib/outbox";
 
 const FIELDS = ["title", "deadline", "priority", "company", "mainCategory", "contentType", "scriptWriter", "scriptLink", "presenter",
   "cinematographer", "videoEditor", "status", "thumbnail", "rawFile", "finalOutput", "comments", "uploadFacebook", "uploadYoutube",
@@ -17,10 +18,12 @@ export async function addLogRowAction(f: FormData) {
   const day = f.get("day")!.toString();
   if (!u.can("logsheet", "EDIT")) redirect(`/logsheet?day=${day}&e=No edit access`);
   const date = new Date(day);
-  const count = await prisma.logRow.count({ where: { date } });
   const data = read(f);
+  const rowIndex = await nextLogIndex(prisma, date);
   // SN is set automatically when a title is filled, like the sheet.
-  await prisma.logRow.create({ data: { ...data, date, rowIndex: count, sn: data.title ? count + 1 : null } });
+  const sn = data.title ? (await prisma.logRow.count({ where: { date, title: { not: null } } })) + 1 : null;
+  const row = await prisma.logRow.create({ data: { ...data, date, rowIndex, sn } });
+  await queueLogRow(prisma, row, true);
   await prisma.auditLog.create({ data: { userId: u.id, action: "create", entity: "logrow" } });
   revalidatePath("/logsheet");
   redirect(`/logsheet?day=${day}&ok=Row added`);
@@ -31,7 +34,7 @@ export async function saveLogRowAction(f: FormData) {
   const day = f.get("day")!.toString();
   if (!u.can("logsheet", "EDIT")) redirect(`/logsheet?day=${day}&e=No edit access`);
   const id = f.get("id")!.toString();
-  await prisma.logRow.update({ where: { id }, data: read(f) });
+  await queueLogRow(prisma, await prisma.logRow.update({ where: { id }, data: read(f) }));
   await prisma.auditLog.create({ data: { userId: u.id, action: "update", entity: "logrow", entityId: id } });
   revalidatePath("/logsheet");
   redirect(`/logsheet?day=${day}&ok=Saved`);
@@ -42,14 +45,24 @@ export async function tickBroadcastAction(f: FormData) {
   if (!u.can("broadcast", "EDIT")) redirect("/broadcast?e=No edit access");
   const id = f.get("id")!.toString();
   const field = f.get("field")!.toString();
-  const b = await prisma.broadcastSlot.findUniqueOrThrow({ where: { id } });
+  const b = await prisma.broadcastSlot.findUniqueOrThrow({ where: { id }, include: { interview: { include: { company: true } } } });
+  const tick = (received: boolean, missed: boolean) =>
+    enqueue(prisma, "broadcast", `bc:${b.interviewId}:${b.slot}`, {
+      type: "bc.tick", tab: b.interview.company.sheetTab ?? b.interview.company.name,
+      co: b.interview.title, date: b.interview.interviewDate.toISOString().slice(0, 10), slot: Number(b.slot.slice(1)), received, missed,
+    });
   const now = new Date();
-  if (field === "missed") await prisma.broadcastSlot.update({ where: { id }, data: { missedSent: true, missedAt: now, sentById: u.id } });
+  if (field === "missed") {
+    await prisma.broadcastSlot.update({ where: { id }, data: { missedSent: true, missedAt: now, sentById: u.id } });
+    await tick(b.receivedSent, true);
+  }
   if (field === "sms") await prisma.broadcastSlot.update({ where: { id }, data: { smsSent: true, sentById: u.id } });
   if (field === "received") {
-    if (!b.missedSent || !b.missedAt) redirect("/broadcast?e=Send the Missed call first");
-    const hours = (now.getTime() - b.missedAt.getTime()) / 3_600_000;
+    if (!b.missedSent) redirect("/broadcast?e=Send the Missed call first");
+    // Missed ticked in the Google Sheet has no time, so the 3 hour check is skipped for it.
+    const hours = b.missedAt ? (now.getTime() - b.missedAt.getTime()) / 3_600_000 : 99;
     await prisma.broadcastSlot.update({ where: { id }, data: { receivedSent: true, receivedAt: now, sentById: u.id } });
+    await tick(true, true);
     revalidatePath("/broadcast");
     if (hours < 3) redirect(`/broadcast?e=Saved, but only ${hours.toFixed(1)} hours after Missed (rule: 3+ hours)`);
   }
