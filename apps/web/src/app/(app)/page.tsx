@@ -6,6 +6,7 @@ import { myOpenTasks, myComingTasks } from "@/lib/queries";
 import { myBroadcast, officerOf } from "@/lib/broadcast";
 import { TaskCard, Flash } from "@/components/TaskCard";
 import { BcCard } from "@/components/BcCard";
+import { OwnTasks } from "@/components/OwnTasks";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ denied?: string; e?: string; ok?: string }> }) {
   const u = await requireUser();
@@ -58,6 +59,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         {mgr && <Link href="/tasks/new" className="btn">+ New task (any other work)</Link>}
         <Link href="/requests?new=1" className="btn">✉ Send a request to anyone</Link>
       </div>
+      <OwnTasks userId={u.id} short />
 
       {bc.length > 0 && (
         <>

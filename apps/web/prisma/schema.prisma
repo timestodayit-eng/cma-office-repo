@@ -55,6 +55,7 @@ model User {
   payslips         Payslip[]
   noticesSent      Notice[]
   noticeReads      NoticeRead[]
+  ownTasks         OwnTask[]
 }
 
 model ModulePermission {
@@ -408,4 +409,17 @@ model NoticeRead {
 
   @@unique([noticeId, userId])
   @@index([userId, readAt])
+}
+
+/// A task a person gives to themselves. Private: only that person sees it.
+model OwnTask {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  dueDate   DateTime? @db.Date
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, doneAt])
 }
