@@ -86,7 +86,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
               <details key={p.id} className="attrow">
                 <summary>
                   <span className="av sm">{initials(p.name)}</span>
-                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}</span></span>
+                  <span className="grow"><b>{p.name}</b><span className="small muted">{p.designation ?? ""}</span></span>
                   {pay ? <span className="small mono">{tk(pay.basic)}{pay.allowance ? ` + ${tk(pay.allowance)}` : ""}</span> : <span className="pill p-amber">Not set</span>}
                 </summary>
                 <form action={paySavePersonAction} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 14px 14px" }}>
@@ -153,7 +153,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
           <details key={l.userId} className="attrow">
             <summary>
               <span className="av sm">{initials(l.name)}</span>
-              <span className="grow"><b>{l.name}</b><span className="small muted"> · {l.present} present · {l.late} late · {l.absent} absent</span></span>
+              <span className="grow"><b>{l.name}</b><span className="small muted">{l.present} present · {l.late} late · {l.absent} absent</span></span>
               {l.status === "FINAL" ? <span className="pill p-good">Final</span> : l.edited || l.bonus || l.deduction || l.otHours ? <span className="pill p-pri">Edited</span> : null}
               <b className="mono">{l.hasPay || l.status === "FINAL" ? tk(l.net) : "—"}</b>
             </summary>

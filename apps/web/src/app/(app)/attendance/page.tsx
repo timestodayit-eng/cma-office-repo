@@ -61,7 +61,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
               <details key={p.id} className="attrow">
                 <summary>
                   <span className="av sm">{initials(p.name)}</span>
-                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}{rules.people?.[p.id] ? ` · ${pt.start}–${pt.end}` : ""}</span></span>
+                  <span className="grow"><b>{p.name}</b><span className="small muted">{[p.designation, rules.people?.[p.id] ? `${pt.start}–${pt.end}` : ""].filter(Boolean).join(" · ")}</span></span>
                   {!a ? <span className="pill p-grey">{off ? "Off day" : "Not in"}</span>
                     : a.status === "LEAVE" ? <span className="pill p-violet">Leave</span>
                     : a.status === "ABSENT" ? <span className="pill p-bad">Absent</span>
@@ -131,7 +131,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
               <details key={p.id} className="attrow">
                 <summary>
                   <span className="av sm">{initials(p.name)}</span>
-                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}</span></span>
+                  <span className="grow"><b>{p.name}</b><span className="small muted">{p.designation ?? ""}</span></span>
                   <span className="small mono">{pt.start} – {pt.end}</span>
                   <span className={`pill ${own ? "p-pri" : "p-grey"}`}>{own ? `Own time · ${offNames(pt.weeklyOff)}` : "Default"}</span>
                 </summary>
