@@ -341,22 +341,28 @@ export async function saveSettingsAction(f: FormData) {
 
 /* ---------- old data upload ---------- */
 
-export async function uploadSnapshotAction(f: FormData) {
+/** Returns a message instead of redirecting, so the page can show it next to the button. */
+export async function uploadSnapshotAction(f: FormData): Promise<{ ok?: string; e?: string }> {
   const u = await requireUser();
-  if (u.level !== "SUPER_ADMIN" || !u.can("settings", "EDIT")) redirect("/?denied=settings");
+  if (u.level !== "SUPER_ADMIN" || !u.can("settings", "EDIT")) return { e: "Only the super admin can upload data" };
   const file = f.get("file");
-  if (!(file instanceof File) || !file.size) back("/settings/sheets", { e: "Choose the data file first" });
+  if (!(file instanceof File) || !file.size) return { e: "Choose the data file first" };
   let snap: Parameters<typeof importSnapshot>[0];
   try {
-    snap = JSON.parse(await (file as File).text());
+    snap = JSON.parse(await file.text());
     if (typeof snap !== "object" || !snap || !("recruitment" in snap || "log" in snap || "broadcast" in snap)) throw new Error();
   } catch {
-    back("/settings/sheets", { e: "This is not the CMA data file" });
+    return { e: "This is not the CMA data file" };
   }
-  const r = await importSnapshot(snap!);
-  await prisma.auditLog.create({ data: { userId: u.id, action: "import", entity: "snapshot", data: r } });
-  revalidatePath("/", "layout");
-  back("/settings/sheets", { ok: `Imported ${r.interviews} interviews, ${r.slots} call days, ${r.logRows} log rows.` });
+  try {
+    const r = await importSnapshot(snap);
+    await prisma.auditLog.create({ data: { userId: u.id, action: "import", entity: "snapshot", data: r } });
+    revalidatePath("/", "layout");
+    return { ok: `Done. Imported ${r.interviews} interviews, ${r.slots} call days, ${r.logRows} log rows.` };
+  } catch (err) {
+    console.error("snapshot import failed", err);
+    return { e: "Import failed: " + String((err as Error)?.message ?? err).slice(0, 200) };
+  }
 }
 
 export async function startTimelineAction(f: FormData) {

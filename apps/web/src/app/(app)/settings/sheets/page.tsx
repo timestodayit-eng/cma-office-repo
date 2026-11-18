@@ -7,7 +7,7 @@ import { sheetScript, SHEET_LABEL } from "@/lib/sheetScript";
 import { fmtTime } from "@/lib/format";
 import { Flash } from "@/components/TaskCard";
 import { CopyBox } from "@/components/CopyBox";
-import { uploadSnapshotAction } from "@/app/actions";
+import { SnapshotUpload } from "@/components/SnapshotUpload";
 
 const KINDS: SheetKind[] = ["recruitment", "log", "broadcast"];
 
@@ -69,12 +69,7 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
         </div>
       )}
       {admin && (
-        <form action={uploadSnapshotAction} className="card">
-          <b>Upload old data file</b>
-          <p className="hint">Backup way to bring in the old data (the snapshot file of 18 Nov). Safe to do twice: rows are updated, never doubled.</p>
-          <input type="file" name="file" accept=".json,application/json" required />
-          <button className="btn" style={{ alignSelf: "flex-start" }}>Upload and import</button>
-        </form>
+        <SnapshotUpload />
       )}
     </>
   );
