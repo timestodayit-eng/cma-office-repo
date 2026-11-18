@@ -51,6 +51,7 @@ model User {
   requestsReceived Request[]          @relation("to")
   notifications    Notification[]
   interviews       Interview[]        @relation("createdBy")
+  attendance       Attendance[]
 }
 
 model ModulePermission {
@@ -325,4 +326,27 @@ model SheetOutbox {
 
   @@index([sentAt, sheet])
   @@index([ref])
+}
+
+/// One row per person per day. Check-in is accepted only from the office WiFi (router MAC) or set by an admin.
+model Attendance {
+  id        String    @id @default(cuid())
+  userId    String
+  date      DateTime  @db.Date
+  checkIn   DateTime?
+  checkOut  DateTime?
+  late      Boolean   @default(false)
+  /// wifi = from the mobile app on office WiFi, admin = set by HR/admin
+  method    String    @default("wifi")
+  /// PRESENT, LEAVE, ABSENT (the last two are set by an admin)
+  status    String    @default("PRESENT")
+  bssid     String?
+  note      String?
+  editedById String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
 }

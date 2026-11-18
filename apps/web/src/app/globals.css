@@ -239,3 +239,9 @@ table.sheet.log{table-layout:fixed;width:max-content}
 .cc-msg.wait{color:var(--muted)}
 .cc-li{padding-left:14px;position:relative}.cc-li::before{content:"•";position:absolute;left:2px;color:var(--muted)}
 .cc-in{display:flex;gap:8px}.cc-in .inp{flex:1;min-width:0}
+
+/* Attendance */
+.attrow{border-bottom:1px solid var(--line)}.attrow:last-child{border-bottom:0}
+.attrow summary,.attrow .sum{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;list-style:none;flex-wrap:wrap}
+.attrow .sum{cursor:default}.attrow summary::-webkit-details-marker{display:none}
+.btn.big{padding:14px 18px;font-size:16px;align-self:stretch;justify-content:center}

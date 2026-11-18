@@ -4,7 +4,8 @@ import { LEVEL_LABEL, ALL_RESPONSIBILITIES, type Level } from "@cma/core";
 const RESP_LABEL: Record<string, string> = Object.fromEntries(ALL_RESPONSIBILITIES.map((r) => [r.key, r.label]));
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { initials } from "@/lib/format";
+import { initials, todayDhaka } from "@/lib/format";
+import { clock } from "@/lib/attendance";
 import { SideNav, MobileNav, ThemeButton, Icon, type NavItem } from "@/components/Nav";
 import { myBroadcastCount } from "@/lib/broadcast";
 import { logoutAction } from "../actions";
@@ -19,7 +20,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     prisma.notification.count({ where: { userId: u.id, readAt: null } }),
   ]);
 
-  const [bcTodo] = await Promise.all([u.can("broadcast") ? myBroadcastCount(u.id) : 0]);
+  const [bcTodo, att] = await Promise.all([
+    u.can("broadcast") ? myBroadcastCount(u.id) : 0,
+    prisma.attendance.findUnique({ where: { userId_date: { userId: u.id, date: todayDhaka() } } }),
+  ]);
   const items: NavItem[] = [
     { href: "/", label: "Home", icon: "home" },
     { href: "/tasks", label: "My Tasks", icon: "tasks", count: myTodo },
@@ -52,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/profile" className="av" aria-label="Profile">{initials(u.name)}</Link>
           <div className="who"><b>{u.name}</b><span>{[LEVEL_LABEL[u.level as Level], ...(duties.length ? duties : [u.designation])].filter(Boolean).join(" · ")}</span></div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-            <Link href="/attendance" className="att"><span className="dot" /><b>Attendance</b><span>· starts with the mobile app</span></Link>
+            {u.can("attendance") && !u.external && <Link href="/attendance" className="att"><span className="dot" style={att?.checkIn ? { background: att.late ? "var(--amber)" : "var(--good)" } : undefined} /><b>{att?.status === "LEAVE" ? "Leave" : att?.checkOut ? "Checked out" : att?.checkIn ? "Present" : "Not checked in"}</b>{att?.checkIn && <span>· {clock(att.checkIn)}</span>}<span>Attendance ›</span></Link>}
             <Link href="/notifications" className="iconbtn" aria-label="Notifications"><Icon name="bell" />{unread > 0 && <span className="dot">{unread}</span>}</Link>
             <ThemeButton />
             <form action={logoutAction}><button className="iconbtn" aria-label="Log out" title="Log out"><Icon name="logout" /></button></form>
