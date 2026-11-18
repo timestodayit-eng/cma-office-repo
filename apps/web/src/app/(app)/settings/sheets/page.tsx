@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { getSheetConfig, type SheetKind } from "@/lib/outbox";
 import { sheetScript, SHEET_LABEL } from "@/lib/sheetScript";
+import { backupScript, getBackupInfo } from "@/lib/backup";
 import { fmtTime } from "@/lib/format";
 import { Flash } from "@/components/TaskCard";
 import { CopyBox } from "@/components/CopyBox";
@@ -23,6 +24,8 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
   const cfg = await getSheetConfig();
   const waiting = await prisma.sheetOutbox.groupBy({ by: ["sheet"], where: { sentAt: null }, _count: true });
   const counts = await Promise.all([prisma.interview.count(), prisma.logRow.count(), prisma.broadcastSlot.count()]);
+  const backup = await getBackupInfo();
+  const payAdmin = u.has("payroll");
   const fresh = (at?: string) => !!at && Date.now() - new Date(at).getTime() < 26 * 3600_000;
 
   return (
@@ -67,6 +70,25 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
             <li>This page then shows <b>Connected</b>. When you reload the sheet, a new menu <b>CMA Office</b> appears next to your own menus.</li>
           </ol>
           <p className="hint">Keep the script private: it holds this app&apos;s key. Do not rename the tabs or move the columns of the three sheets without telling, or the sync cannot find them.</p>
+        </div>
+      )}
+      {payAdmin && (
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <b>Attendance &amp; Payroll backup sheet</b>
+            <span className={`pill ${backup.at && Date.now() - new Date(backup.at).getTime() < 3600_000 ? "p-good" : "p-amber"}`}>{backup.at ? (Date.now() - new Date(backup.at).getTime() < 3600_000 ? "Backing up" : "Stopped") : "Not connected yet"}</span>
+          </div>
+          <div className="hint">
+            A separate Google Sheet that keeps a copy of all attendance, every person&apos;s salary and every month&apos;s payroll. The app writes to it every 5 minutes; nothing typed in that sheet comes back to the app.
+            {backup.at && <><br />Last backup: {fmtTime(new Date(backup.at))} · {backup.rows} rows{backup.url && <> · <a href={backup.url} target="_blank" rel="noreferrer">Open the sheet</a></>}</>}
+          </div>
+          <CopyBox label="Copy script for the backup sheet" text={backupScript(appUrl, cfg.secret)} />
+          <ol className="alist">
+            <li>Open the backup sheet with the owner account. Menu <b>Extensions → Apps Script</b>.</li>
+            <li>Remove the sample lines, paste the copied script, press Save (💾).</li>
+            <li>Choose the function <b>cmaBackupConnect</b> at the top and press <b>▶ Run</b>, then <b>Allow</b>.</li>
+          </ol>
+          <p className="warn">This sheet shows everyone&apos;s salary. Share it only with the people who may see salaries.</p>
         </div>
       )}
       {admin && (

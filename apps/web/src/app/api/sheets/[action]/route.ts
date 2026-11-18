@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { timingSafeEqual } from "node:crypto";
 import { getSheetConfig, patchSheetConfig, pullOps, ackOps, type SheetKind } from "@/lib/outbox";
 import { importRecruitment, importBroadcast, importLogDay, companyByName, type RecRow, type BlRow } from "@/lib/dataImport";
+import { backupTabs, saveBackupInfo } from "@/lib/backup";
 import { recFieldOf, findHeaderRow, parseSheetDate, logTabDate, truthy, type RecField } from "@/lib/sheetRules";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
   const cfg = await getSheetConfig();
   if (typeof body.secret !== "string" || !same(body.secret, cfg.secret)) {
     return NextResponse.json({ ok: false, error: "Wrong key. Copy the script again from Settings." }, { status: 401 });
+  }
+  if (action === "backup") {
+    try {
+      const tabs = await backupTabs();
+      const url = typeof body.url === "string" && body.url.startsWith("https://docs.google.com/") ? body.url : undefined;
+      await saveBackupInfo({ url, at: new Date().toISOString(), rows: tabs.reduce((n, t) => n + t.rows.length - 1, 0) });
+      return NextResponse.json({ ok: true, tabs });
+    } catch (e) {
+      console.error("backup", e);
+      return NextResponse.json({ ok: false, error: (e as Error).message.slice(0, 300) }, { status: 500 });
+    }
   }
   const sheet = String(body.sheet) as SheetKind;
   if (!KINDS.includes(sheet)) return NextResponse.json({ ok: false, error: "Unknown sheet" }, { status: 400 });
