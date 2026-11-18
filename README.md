@@ -64,3 +64,15 @@ The snapshot file is kept in the project's private files, not in this repository
 
 Point the domain's DNS A record at the VPS IP; Caddy gets the HTTPS certificate by itself.
 Database backups are written daily to `./backups` (14 days kept).
+
+## Windows desktop app and Work Monitor
+
+`desktop/` is an Electron app (npm, not part of the pnpm workspace). It opens the same office app in its own window and adds **Start work / Stop work**:
+
+- Only between Start work and Stop work: a screenshot of every screen at a random moment every 5–10 minutes (admin sets it), compressed to JPEG; once a minute the app in front, its window title and idle time.
+- Locking the PC, sleep, logging out or quitting ends the session. Nothing is recorded outside a session. No keystrokes, passwords or messages.
+- Admins (super admins or the "Work Monitor admin" duty) can open a live view while a person is working; the person sees "Admin is viewing your screen" and a red tray icon. Live pictures stay in memory, never on disk.
+- Staff read the notice in the installer and on first start; the tray icon is green while working.
+- Screenshots are stored on the server in the `shots` Docker volume (`SHOTS_DIR`). Admins delete them on Work Monitor → Rules & storage (by person / dates), plus auto-delete after N days (default 30).
+
+The workflow `.github/workflows/desktop.yml` builds `CMA-Office-Setup.exe` on Windows and puts it on the release tag `desktop-latest`. The installer is not code-signed, so Windows shows "Windows protected your PC": More info → Run anyway.

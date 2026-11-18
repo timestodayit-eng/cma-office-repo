@@ -77,6 +77,7 @@ export const RESPONSIBILITY_GROUPS = [
       { key: "assign", label: "Assign tasks manually / add JD duties" },
       { key: "attendance", label: "Attendance admin" },
       { key: "payroll", label: "Payroll admin" },
+      { key: "monitor", label: "Work Monitor admin (screenshots, live screen)" },
     ],
   },
 ] as const;

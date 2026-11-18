@@ -25,7 +25,7 @@ export default async function Modules() {
     <>
       <h1 className="h1">Modules</h1>
       <div className="mods">
-        {MODS.filter(([m]) => !m || u.can(m)).map(([, href, ic, label, color]) => (
+        {MODS.filter(([m]) => !m || (m === "monitor" ? u.has("monitor") : u.can(m))).map(([, href, ic, label, color]) => (
           <Link key={href} href={href} className="mod">
             <span className="ic" style={{ background: `${color}1f`, color }}><Icon name={ic} /></span><b>{label}</b>
           </Link>

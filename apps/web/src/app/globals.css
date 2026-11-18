@@ -251,3 +251,15 @@ table.sheet.log{table-layout:fixed;width:max-content}
 .payrows>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .payrows>div span{color:var(--muted)}
 .payrows .tot{border-bottom:0;font-size:16px;padding-top:10px}.payrows .tot span{color:var(--ink);font-weight:600}
+/* Work Monitor */
+.deskbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 16px 0;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px}
+.deskbar .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.deskbar.on{border-color:var(--good);background:color-mix(in srgb,var(--good) 8%,var(--panel))}
+.deskbar.on .dot{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 25%,transparent)}
+.deskbar .grow{flex:1;min-width:200px}
+.moncard{color:var(--ink);text-decoration:none}
+.monshot{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--bg)}
+.monshot.empty{display:flex;align-items:center;justify-content:center}
+.shotgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.shot{display:flex;flex-direction:column;gap:4px;color:var(--ink);text-decoration:none}
+.shot img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--line)}

@@ -53,6 +53,8 @@ model User {
   interviews       Interview[]        @relation("createdBy")
   attendance       Attendance[]
   payslips         Payslip[]
+  workSessions     WorkSession[]
+  screenshots      Screenshot[]
 }
 
 model ModulePermission {
@@ -374,4 +376,60 @@ model Payslip {
 
   @@unique([userId, month])
   @@index([month])
+}
+
+/// Work Monitor: one "Start work" to "Stop work" on the desktop app.
+/// Screenshots and activity are only recorded inside a session.
+model WorkSession {
+  id         String    @id @default(cuid())
+  userId     String
+  startedAt  DateTime  @default(now())
+  /// Null while working. Set by Stop work, or by the server when the app goes silent.
+  endedAt    DateTime?
+  lastBeatAt DateTime  @default(now())
+  /// stop = Stop work, lock = PC locked / slept, quit = app closed, silent = app stopped reporting, logout
+  endReason  String?
+  device     String?
+  activeSec  Int       @default(0)
+  idleSec    Int       @default(0)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shots      Screenshot[]
+  samples    ActivitySample[]
+
+  @@index([userId, startedAt])
+  @@index([endedAt])
+}
+
+/// A compressed JPEG on the server's disk (SHOTS_DIR). Only Work Monitor admins can open it.
+model Screenshot {
+  id        String      @id @default(cuid())
+  sessionId String
+  userId    String
+  takenAt   DateTime
+  /// Path under SHOTS_DIR, e.g. 2026-11-18/<userId>/<id>.jpg
+  file      String
+  bytes     Int
+  screen    Int         @default(0)
+  app       String?
+  title     String?
+  session   WorkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, takenAt])
+  @@index([takenAt])
+}
+
+/// One row per minute of a work session: the app in front, its window title and whether the person was idle.
+model ActivitySample {
+  id        String      @id @default(cuid())
+  sessionId String
+  userId    String
+  at        DateTime
+  app       String?
+  title     String?
+  idle      Boolean     @default(false)
+  session   WorkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
+  @@index([sessionId])
 }

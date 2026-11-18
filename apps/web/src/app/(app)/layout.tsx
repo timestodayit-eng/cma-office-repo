@@ -9,6 +9,7 @@ import { clock } from "@/lib/attendance";
 import { SideNav, MobileNav, ThemeButton, Icon, type NavItem } from "@/components/Nav";
 import { myBroadcastCount } from "@/lib/broadcast";
 import { logoutAction } from "../actions";
+import { DesktopBar } from "@/components/Monitor";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ["performance", { href: "/performance", label: "Performance", icon: "performance" }],
     ["monitor", { href: "/monitor", label: "Work Monitor", icon: "monitor" }],
   ];
-  for (const [m, item] of mods) if (u.can(m)) items.push({ ...item, section: "Modules" });
+  // Work Monitor: only its admins (super admins or the "Work Monitor admin" duty), whatever the module setting says.
+  for (const [m, item] of mods) if (m === "monitor" ? u.has("monitor") : u.can(m)) items.push({ ...item, section: "Modules" });
   // Short header line: only the working roles, not every permission.
   const SHOW = ["ads", "broadcast_officer", "writer", "model", "editor", "qc", "creative_lead", "content_director", "cinematographer", "uploader"];
   const duties = SHOW.filter((k) => u.resp.has(k as never)).map((k) => RESP_LABEL[k]?.split(" (")[0].split(" / ")[0]).filter(Boolean).slice(0, 2);
@@ -62,6 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <form action={logoutAction}><button className="iconbtn" aria-label="Log out" title="Log out"><Icon name="logout" /></button></form>
           </span>
         </header>
+        <DesktopBar userId={u.id} />
         <main className="screen">{children}</main>
       </div>
       <MobileNav items={[

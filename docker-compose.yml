@@ -30,6 +30,10 @@ services:
       WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
       WHATSAPP_TEMPLATE: ${WHATSAPP_TEMPLATE:-cma_notice}
       WHATSAPP_LANG: ${WHATSAPP_LANG:-en}
+      SHOTS_DIR: /data/shots
+    volumes:
+      # Work Monitor screenshots (compressed JPEGs). Admins delete them from the app.
+      - shots:/data/shots
 
   # HTTPS in front of the app, free certificate from Let's Encrypt.
   caddy:
@@ -59,4 +63,5 @@ services:
 
 volumes:
   dbdata:
+  shots:
   caddydata:
