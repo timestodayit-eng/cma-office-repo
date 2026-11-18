@@ -2,10 +2,10 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { fmtDay, todayDhaka, initials } from "@/lib/format";
-import { getAttRules, clock, dhakaMinutes, DAY_NAMES } from "@/lib/attendance";
+import { getAttRules, clock, dhakaMinutes, timeFor, DAY_NAMES } from "@/lib/attendance";
 import { Flash } from "@/components/TaskCard";
 import { AttButtons, SetOfficeWifi } from "@/components/AttButtons";
-import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction } from "@/app/attActions";
+import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction } from "@/app/attActions";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const hhmm = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", hour: "2-digit", minute: "2-digit", hour12: false }).format(d) : "");
@@ -55,11 +55,13 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
         <div className="card" style={{ gap: 0, padding: 0 }}>
           {people.map((p) => {
             const a = by.get(p.id);
+            const pt = timeFor(rules, p.id);
+            const off = pt.weeklyOff.includes(day.getUTCDay());
             return (
               <details key={p.id} className="attrow">
                 <summary>
                   <span className="av sm">{initials(p.name)}</span>
-                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}</span></span>
+                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}{rules.people?.[p.id] ? ` · ${pt.start}–${pt.end}` : ""}</span></span>
                   {!a ? <span className="pill p-grey">{off ? "Off day" : "Not in"}</span>
                     : a.status === "LEAVE" ? <span className="pill p-violet">Leave</span>
                     : a.status === "ABSENT" ? <span className="pill p-bad">Absent</span>
@@ -70,7 +72,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                   <select name="status" className="inp" style={{ width: "auto" }} defaultValue={a?.status ?? "PRESENT"}>
                     <option value="PRESENT">Present</option><option value="LEAVE">Leave</option><option value="ABSENT">Absent</option><option value="CLEAR">Clear the day</option>
                   </select>
-                  <label className="small">In <input type="time" name="in" defaultValue={hhmm(a?.checkIn ?? null) || rules.start} className="inp" style={{ width: "auto" }} /></label>
+                  <label className="small">In <input type="time" name="in" defaultValue={hhmm(a?.checkIn ?? null) || pt.start} className="inp" style={{ width: "auto" }} /></label>
                   <label className="small">Out <input type="time" name="out" defaultValue={hhmm(a?.checkOut ?? null)} className="inp" style={{ width: "auto" }} /></label>
                   <input name="note" placeholder="Note (why)" defaultValue={a?.note ?? ""} className="inp" style={{ flex: 1, minWidth: 140 }} />
                   <button className="btn sm primary">Save</button>
@@ -84,6 +86,8 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   }
 
   if (tab === "rules") {
+    const people = await prisma.user.findMany({ where: { active: true, external: false }, orderBy: { name: "asc" } });
+    const offNames = (d: number[]) => (d.length ? d.map((i) => DAY_NAMES[i].slice(0, 3)).join(", ") : "no off day");
     return (
       <>
         <h1 className="h1">Attendance</h1>
@@ -115,6 +119,42 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
           </div>
           <button className="btn primary" style={{ alignSelf: "flex-start" }}>Save rules</button>
         </form>
+        <div className="card" style={{ gap: 0, padding: 0 }}>
+          <div style={{ padding: "12px 14px" }}>
+            <b>Office time per person</b>
+            <p className="hint">Everyone follows the office time above unless you set their own here (shift, shorter day, another off day). Tap a name to change it.</p>
+          </div>
+          {people.map((p) => {
+            const own = rules.people?.[p.id];
+            const pt = timeFor(rules, p.id);
+            return (
+              <details key={p.id} className="attrow">
+                <summary>
+                  <span className="av sm">{initials(p.name)}</span>
+                  <span className="grow"><b>{p.name}</b><span className="small muted"> · {p.designation ?? ""}</span></span>
+                  <span className="small mono">{pt.start} – {pt.end}</span>
+                  <span className={`pill ${own ? "p-pri" : "p-grey"}`}>{own ? `Own time · ${offNames(pt.weeklyOff)}` : "Default"}</span>
+                </summary>
+                <form action={attSavePersonAction} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 14px 14px" }}>
+                  <input type="hidden" name="userId" value={p.id} />
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <label className="field">Starts<input type="time" name="start" defaultValue={pt.start} className="inp" /></label>
+                    <label className="field">Ends<input type="time" name="end" defaultValue={pt.end} className="inp" /></label>
+                    <label className="field">Late after (minutes)<input type="number" name="graceMin" min={0} max={120} defaultValue={pt.graceMin} className="inp" /></label>
+                  </div>
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <span className="small muted">Off day:</span>
+                    {DAY_NAMES.map((d, i) => <label key={d} className="row small" style={{ gap: 4 }}><input type="checkbox" name="weeklyOff" value={i} defaultChecked={pt.weeklyOff.includes(i)} />{d.slice(0, 3)}</label>)}
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button className="btn sm primary" name="mode" value="own">Save for {p.name.split(" ")[0]}</button>
+                    {own && <button className="btn sm" name="mode" value="default">Use the default time</button>}
+                  </div>
+                </form>
+              </details>
+            );
+          })}
+        </div>
       </>
     );
   }
@@ -122,10 +162,11 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
   const rows = await prisma.attendance.findMany({ where: { userId: u.id, date: { gte: monthStart, lte: today } }, orderBy: { date: "desc" } });
   const mine = rows.find((r) => r.date.getTime() === today.getTime());
-  const off = rules.weeklyOff.includes(today.getUTCDay());
+  const my = timeFor(rules, u.id);
+  const off = my.weeklyOff.includes(today.getUTCDay());
   const state = u.external ? "off" : mine?.checkOut || (mine && mine.status !== "PRESENT") ? "done" : mine?.checkIn ? "in" : "none";
   const worked = (r: (typeof rows)[number]) => (r.checkIn && r.checkOut ? Math.max(0, Math.round((r.checkOut.getTime() - r.checkIn.getTime()) / 60000)) : 0);
-  const lateNow = !mine && !off && dhakaMinutes(new Date()) > Number(rules.start.slice(0, 2)) * 60 + Number(rules.start.slice(3)) + rules.graceMin;
+  const lateNow = !mine && !off && dhakaMinutes(new Date()) > Number(my.start.slice(0, 2)) * 60 + Number(my.start.slice(3)) + my.graceMin;
   return (
     <>
       <h1 className="h1">Attendance</h1>
@@ -141,7 +182,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
             : off ? <span className="pill p-grey">Weekly off day</span>
             : <span className={`pill ${lateNow ? "p-amber" : "p-grey"}`}>{lateNow ? "Not checked in · late" : "Not checked in"}</span>}
         </div>
-        <div className="small muted">Office time {rules.start} – {rules.end} · late after {rules.graceMin} minutes</div>
+        <div className="small muted">Your office time {my.start} – {my.end} · late after {my.graceMin} minutes</div>
         {mine?.checkIn && <div>In <b>{clock(mine.checkIn)}</b>{mine.checkOut ? <> · Out <b>{clock(mine.checkOut)}</b> · {Math.floor(worked(mine) / 60)}h {worked(mine) % 60}m</> : null}{mine.method === "admin" ? <span className="small muted"> · set by admin</span> : null}</div>}
         <AttButtons state={state} />
       </div>

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { AttError, addOfficeWifi, checkIn, checkOut, clock, getAttRules, isLate, saveAttRules } from "@/lib/attendance";
+import { AttError, addOfficeWifi, checkIn, checkOut, clock, getAttRules, isLate, saveAttRules, timeFor } from "@/lib/attendance";
 
 type Wifi = { bssid?: string; ssid?: string } | null;
 const s = (f: FormData, k: string) => (f.get(k)?.toString() ?? "").trim();
@@ -57,6 +57,28 @@ export async function attSaveRulesAction(f: FormData) {
   back("rules", { ok: "Rules saved." });
 }
 
+/** Own office time for one person (shift, shorter day, other off day), or back to the default. */
+export async function attSavePersonAction(f: FormData) {
+  try { await admin(); } catch { back("rules", { e: "Only HR / admin can do this" }); }
+  const userId = s(f, "userId");
+  const r = await getAttRules();
+  const people = { ...(r.people ?? {}) };
+  if (f.get("mode") === "default") {
+    delete people[userId];
+  } else {
+    const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!userId || !hhmm.test(s(f, "start")) || !hhmm.test(s(f, "end"))) back("rules", { e: "Write the time like 14:00 and 22:00" });
+    people[userId] = {
+      start: s(f, "start"), end: s(f, "end"),
+      graceMin: Math.min(120, Math.max(0, Math.round(Number(s(f, "graceMin")) || 0))),
+      weeklyOff: f.getAll("weeklyOff").map(Number).filter((n) => n >= 0 && n <= 6),
+    };
+  }
+  await saveAttRules({ people });
+  revalidatePath("/", "layout");
+  back("rules", { ok: f.get("mode") === "default" ? "Back to the default office time." : "Saved for this person." });
+}
+
 /** HR / admin corrects one person's day: present with times, leave, absent, or clear. */
 export async function attAdminSetAction(f: FormData) {
   let me: Awaited<ReturnType<typeof admin>>;
@@ -75,7 +97,7 @@ export async function attAdminSetAction(f: FormData) {
   const present = status === "PRESENT";
   const cin = present ? at("in") : null;
   if (present && !cin) back(tab, { e: "Write the check-in time, like 09:05" });
-  const data = { status: present ? "PRESENT" : status === "LEAVE" ? "LEAVE" : "ABSENT", checkIn: cin, checkOut: present ? at("out") : null, late: cin ? isLate(cin, r) : false, method: "admin", note: s(f, "note") || null, editedById: me!.id };
+  const data = { status: present ? "PRESENT" : status === "LEAVE" ? "LEAVE" : "ABSENT", checkIn: cin, checkOut: present ? at("out") : null, late: cin ? isLate(cin, timeFor(r, userId)) : false, method: "admin", note: s(f, "note") || null, editedById: me!.id };
   await prisma.attendance.upsert({ where, update: data, create: { userId, date, ...data } });
   await prisma.auditLog.create({ data: { userId: me!.id, action: "attendance.set", entity: "attendance", data: { userId, day, status: data.status } } });
   revalidatePath("/", "layout");

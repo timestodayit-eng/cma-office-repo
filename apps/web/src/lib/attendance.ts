@@ -4,8 +4,10 @@ import { prisma } from "./db";
 import { todayDhaka } from "./format";
 
 export type OfficeWifi = { bssid: string; ssid: string; addedAt: string };
-export type AttRules = { start: string; end: string; graceMin: number; weeklyOff: number[]; wifi: OfficeWifi[] };
-export const DEFAULT_RULES: AttRules = { start: "09:00", end: "18:00", graceMin: 15, weeklyOff: [5], wifi: [] };
+export type PersonTime = { start: string; end: string; graceMin: number; weeklyOff: number[] };
+/** `people` holds the office time of anyone whose time differs from the default (shift, 6-hour, own off day). */
+export type AttRules = PersonTime & { wifi: OfficeWifi[]; people: Record<string, PersonTime> };
+export const DEFAULT_RULES: AttRules = { start: "09:00", end: "18:00", graceMin: 15, weeklyOff: [5], wifi: [], people: {} };
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export class AttError extends Error {}
@@ -18,6 +20,12 @@ export async function saveAttRules(patch: Partial<AttRules>) {
   const value = { ...(await getAttRules()), ...patch };
   await prisma.setting.upsert({ where: { key: "attendance" }, update: { value: value as never }, create: { key: "attendance", value: value as never } });
   return value;
+}
+
+/** This person's office time: their own if one is set, otherwise the default. */
+export function timeFor(r: AttRules, userId: string): PersonTime {
+  const p = r.people?.[userId];
+  return p ?? { start: r.start, end: r.end, graceMin: r.graceMin, weeklyOff: r.weeklyOff };
 }
 
 /** aa-bb-cc-dd-ee-ff / AABB.CCDD.EEFF -> aa:bb:cc:dd:ee:ff; null when it is not a real router MAC. */
@@ -33,7 +41,7 @@ export function dhakaMinutes(d: Date) {
   return (h % 24) * 60 + m;
 }
 const mins = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + (m || 0); };
-export const isLate = (at: Date, r: AttRules) => dhakaMinutes(at) > mins(r.start) + r.graceMin;
+export const isLate = (at: Date, r: PersonTime) => dhakaMinutes(at) > mins(r.start) + r.graceMin;
 export const clock = (d: Date | null | undefined) =>
   d ? new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Dhaka", hour: "numeric", minute: "2-digit" }).format(d) : "";
 
@@ -52,7 +60,7 @@ export async function checkIn(userId: string, wifi: { bssid?: unknown } | null) 
   const now = new Date();
   const ex = await prisma.attendance.findUnique({ where: { userId_date: { userId, date } } });
   if (ex?.checkIn) throw new AttError(`You already checked in at ${clock(ex.checkIn)}.`);
-  const data = { checkIn: now, late: isLate(now, r), method: "wifi", status: "PRESENT", bssid };
+  const data = { checkIn: now, late: isLate(now, timeFor(r, userId)), method: "wifi", status: "PRESENT", bssid };
   return prisma.attendance.upsert({ where: { userId_date: { userId, date } }, update: data, create: { userId, date, ...data } });
 }
 
