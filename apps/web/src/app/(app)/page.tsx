@@ -39,7 +39,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   return (
     <>
       {sp.denied && <div className="err">You do not have access to that module.</div>}
-      <div><div className="hint">Shuprobhat,</div><h1 className="h1">{u.shortName ?? u.name} 👋</h1></div>
+      <div><div className="hint">Shuprobhat,</div><h1 className="h1">{u.shortName ?? u.name} <span style={{ color: "var(--ink)" }}>👋</span></h1></div>
       <Flash sp={sp} />
       {notice && (
         <Link href="/notices" className="card" style={{ borderColor: "var(--pri)", background: "var(--pri-soft)", gap: 4 }}>
