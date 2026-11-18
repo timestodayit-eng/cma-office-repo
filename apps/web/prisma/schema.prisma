@@ -1,0 +1,308 @@
+// CMA Office database. One database shared by web, desktop and mobile apps.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Level {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum Access {
+  OFF
+  VIEW
+  EDIT
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  shortName     String?
+  phone         String   @unique
+  email         String?  @unique
+  passwordHash  String
+  level         Level    @default(STAFF)
+  department    String?
+  designation   String?
+  jdCode        String?
+  whatsapp      String?
+  whatsappOn    Boolean  @default(true)
+  /** Freelance / support partner: no attendance, no payroll. */
+  external      Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  permissions      ModulePermission[]
+  responsibilities Responsibility[]
+  companyRoles     CompanyRole[]
+  tasks            Task[]             @relation("assignee")
+  checkingTasks    Task[]             @relation("checker")
+  taskEvents       TaskEvent[]
+  requestsSent     Request[]          @relation("from")
+  requestsReceived Request[]          @relation("to")
+  notifications    Notification[]
+  interviews       Interview[]        @relation("createdBy")
+}
+
+model ModulePermission {
+  id     String @id @default(cuid())
+  userId String
+  module String
+  access Access @default(OFF)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module])
+}
+
+model Responsibility {
+  id           String   @id @default(cuid())
+  userId       String
+  key          String
+  /** Company ids this applies to (empty = all). */
+  companies    String[]
+  /** Content types this applies to (uploader). Empty = all. */
+  contentTypes String[]
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+}
+
+model Company {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  short     String  @unique
+  /** Banglalink hotline series, e.g. ["80","50"]. */
+  hotlines  String[]
+  sheetTab  String?
+  sortOrder Int     @default(0)
+
+  roles      CompanyRole[]
+  interviews Interview[]
+  tasks      Task[]
+}
+
+/// Who holds a role for a company (writer, model, editor x2, qc, ads, broadcast, uploader).
+/// Global roles (creative_lead, content_director, cinematographer) use companyId = null.
+model CompanyRole {
+  id        String   @id @default(cuid())
+  companyId String?
+  role      String
+  userId    String
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, role, userId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// One interview event. Also the row of the Recruitment Command Center sheet.
+model Interview {
+  id            String    @id @default(cuid())
+  companyId     String
+  country       String
+  interviewDate DateTime  @db.Date
+  title         String?
+  status        String    @default("Upcoming")
+  // Recruitment sheet numbers
+  marketingPlanUsd Decimal? @db.Decimal(12, 2)
+  totalCostUsd     Decimal? @db.Decimal(12, 2)
+  totalCostBdt     Decimal? @db.Decimal(14, 2)
+  rateBdt          Decimal? @db.Decimal(8, 2)
+  passports        Int?
+  leads            Int?
+  topUpRequired    Boolean  @default(false)
+  notes            String?
+  /** Sheet sync: tab + row id so two-way sync can find it again. */
+  sheetRef      String?   @unique
+  bridgeWithId  String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company   Company         @relation(fields: [companyId], references: [id])
+  createdBy User?           @relation("createdBy", fields: [createdById], references: [id])
+  tasks     Task[]
+  broadcast BroadcastSlot[]
+
+  @@index([interviewDate])
+}
+
+enum TaskStatus {
+  WAITING // earlier step not done yet
+  TODO
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  interviewId String?
+  companyId   String?
+  chain       String?    // "video" for interview chains, null for a simple task
+  stepKey     String?
+  order       Int        @default(0)
+  title       String
+  description String?
+  /** Role that owns the step; for pool steps the assignee is set when someone claims it. */
+  role        String?
+  pool        Boolean    @default(false)
+  assigneeId  String?
+  checkerId   String?
+  status      TaskStatus @default(WAITING)
+  startDate   DateTime?  @db.Date
+  dueDate     DateTime?  @db.Date
+  startedAt   DateTime?
+  doneAt      DateTime?
+  scriptLink  String?
+  driveLink   String?
+  videoLink   String?
+  postLink    String?
+  handoverNote String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  interview Interview?  @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  company   Company?    @relation(fields: [companyId], references: [id])
+  assignee  User?       @relation("assignee", fields: [assigneeId], references: [id])
+  checker   User?       @relation("checker", fields: [checkerId], references: [id])
+  events    TaskEvent[]
+  requests  Request[]
+
+  @@index([assigneeId, status])
+  @@index([interviewId])
+}
+
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String?
+  type      String   // created, started, done, already_done, claimed, qc_pass, qc_fail, reassigned, note
+  note      String?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+enum RequestType {
+  REVIEW
+  QC
+  MODIFY
+  APPROVAL
+  RAW_FILE
+  CUSTOM
+}
+
+model Request {
+  id         String      @id @default(cuid())
+  fromId     String
+  toId       String
+  type       RequestType
+  taskId     String?
+  message    String
+  status     String      @default("OPEN") // OPEN, ANSWERED
+  answer     String?
+  answeredAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  from User  @relation("from", fields: [fromId], references: [id])
+  to   User  @relation("to", fields: [toId], references: [id])
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([toId, status])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String    // task, request, qc, broadcast, hr
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  /** WhatsApp delivery (phase 2): null = not sent, queued, sent, failed */
+  whatsapp  String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+/// Log Sheet: one row = one line of a day tab ("18 Nov").
+model LogRow {
+  id              String   @id @default(cuid())
+  date            DateTime @db.Date
+  sn              Int?
+  title           String?
+  deadline        String?
+  priority        String?
+  company         String?
+  mainCategory    String?
+  contentType     String?
+  scriptWriter    String?
+  scriptLink      String?
+  presenter       String?
+  cinematographer String?
+  videoEditor     String?
+  status          String?
+  thumbnail       String?
+  rawFile         String?
+  finalOutput     String?
+  comments        String?
+  uploadFacebook  String?
+  uploadYoutube   String?
+  uploadTiktok    String?
+  platformFacebook String?
+  platformYoutube String?
+  platformTiktok  String?
+  finalComments   String?
+  rowIndex        Int      @default(0)
+  taskId          String?
+  sheetRef        String?  @unique
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([status])
+}
+
+/// Banglalink call broadcast: V1..V7 per interview, two ticks per slot.
+model BroadcastSlot {
+  id           String    @id @default(cuid())
+  interviewId  String
+  slot         String
+  callDate     DateTime  @db.Date
+  missedSent   Boolean   @default(false)
+  missedAt     DateTime?
+  receivedSent Boolean   @default(false)
+  receivedAt   DateTime?
+  smsSent      Boolean   @default(false)
+  sentById     String?
+  interview    Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, slot])
+  @@index([callDate])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  data      Json?
+  createdAt DateTime @default(now())
+}
