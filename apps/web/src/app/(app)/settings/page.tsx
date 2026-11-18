@@ -41,6 +41,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <b>Google Sheets connection ›</b>
         <span className="hint">Connect the three sheets two-way, see when they last synced, upload old data.</span>
       </Link>
+      {u.can("attendance", "EDIT") && (
+        <Link href="/attendance?tab=rules" className="card linkcard">
+          <b>Attendance rules and office WiFi ›</b>
+          <span className="hint">Office time, late minutes, weekly off day, and the office WiFi router used for check-in.</span>
+        </Link>
+      )}
       <Link href="/settings/whatsapp" className="card linkcard">
         <b>WhatsApp connection ›</b>
         <span className="hint">Connect the office WhatsApp number so tasks and requests also reach people on WhatsApp.</span>

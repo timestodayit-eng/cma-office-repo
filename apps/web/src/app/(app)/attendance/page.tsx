@@ -144,6 +144,13 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
         {mine?.checkIn && <div>In <b>{clock(mine.checkIn)}</b>{mine.checkOut ? <> · Out <b>{clock(mine.checkOut)}</b> · {Math.floor(worked(mine) / 60)}h {worked(mine) % 60}m</> : null}{mine.method === "admin" ? <span className="small muted"> · set by admin</span> : null}</div>}
         <AttButtons state={state} />
       </div>
+      {admin && rules.wifi.length === 0 && (
+        <div className="card">
+          <b>Office WiFi is not set yet</b>
+          <p className="hint">Nobody can check in until the office router is saved. Do this once, in the office, with this phone on the office WiFi.</p>
+          <SetOfficeWifi />
+        </div>
+      )}
       <div className="stats three">
         <div className="stat"><b>{rows.filter((r) => r.status === "PRESENT").length}</b><span>Days present this month</span></div>
         <div className="stat"><b>{rows.filter((r) => r.late).length}</b><span>Late</span></div>
