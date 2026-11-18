@@ -19,7 +19,7 @@ export default async function Profile({ searchParams }: { searchParams: Promise<
         </div>
         <form className="card stack" action={updateProfileAction}>
           <b>WhatsApp</b>
-          <p className="hint">Tasks, requests and QC notes also reach you on WhatsApp (turned on in the next phase).</p>
+          <p className="hint">Tasks, requests and QC notes also reach you on WhatsApp once the office has connected its WhatsApp number.</p>
           <label className="field">WhatsApp number<input name="whatsapp" defaultValue={u.whatsapp ?? ""} /></label>
           <label className="row small"><input type="checkbox" name="whatsappOn" defaultChecked={u.whatsappOn} /> Send me WhatsApp messages</label>
           <button className="btn">Save</button>

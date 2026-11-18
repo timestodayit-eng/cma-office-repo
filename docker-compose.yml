@@ -24,6 +24,10 @@ services:
       DATABASE_URL: postgresql://cma:${DB_PASSWORD}@db:5432/cma
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       SEED_ON_START: ${SEED_ON_START:-1}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_TEMPLATE: ${WHATSAPP_TEMPLATE:-cma_notice}
+      WHATSAPP_LANG: ${WHATSAPP_LANG:-en}
 
   # HTTPS in front of the app, free certificate from Let's Encrypt.
   caddy:

@@ -1,5 +1,6 @@
 "use server";
 
+import { sendWhatsApp } from "@/lib/whatsapp";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -373,4 +374,15 @@ export async function startTimelineAction(f: FormData) {
   await attachChain(id, { createdById: u.id });
   revalidatePath("/", "layout");
   back(to, { ok: "Timeline started. The writer has been told." });
+}
+
+/* ---------- WhatsApp ---------- */
+
+export async function testWhatsAppAction(): Promise<{ ok?: string; e?: string }> {
+  const u = await requireUser();
+  if (!u.can("settings", "EDIT")) return { e: "Only an admin can test WhatsApp" };
+  const me = await prisma.user.findUnique({ where: { id: u.id }, select: { whatsapp: true } });
+  if (!me?.whatsapp) return { e: "Add your WhatsApp number in Profile first" };
+  const r = await sendWhatsApp(me.whatsapp, "Test message. WhatsApp is connected");
+  return r.ok ? { ok: `Sent to ${me.whatsapp}. Check your WhatsApp.` } : { e: `Not sent: ${r.error}` };
 }

@@ -1,8 +1,9 @@
 import { prisma } from "./db";
+import { flushWhatsApp } from "./whatsapp";
 
 /**
- * In-app notification. When the person has WhatsApp on, it is marked "queued";
- * phase 2 adds the worker that sends queued messages through the WhatsApp Business API.
+ * In-app notification. When the person has WhatsApp on, it is marked "queued"
+ * and sent in the background (see whatsapp.ts) once the server has the WhatsApp keys.
  */
 export async function notify(
   userIds: (string | null | undefined)[],
@@ -18,4 +19,5 @@ export async function notify(
       whatsapp: u.whatsappOn && u.whatsapp ? "queued" : null,
     })),
   });
+  void flushWhatsApp().catch((e) => console.error("whatsapp flush", e));
 }

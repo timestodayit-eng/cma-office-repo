@@ -41,6 +41,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <b>Google Sheets connection ›</b>
         <span className="hint">Connect the three sheets two-way, see when they last synced, upload old data.</span>
       </Link>
+      <Link href="/settings/whatsapp" className="card linkcard">
+        <b>WhatsApp connection ›</b>
+        <span className="hint">Connect the office WhatsApp number so tasks and requests also reach people on WhatsApp.</span>
+      </Link>
       <form action={saveSettingsAction} className="stack">
         <fieldset disabled={!u.can("settings", "EDIT")} style={{ border: 0, padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="card">
