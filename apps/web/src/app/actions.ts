@@ -368,8 +368,9 @@ export async function uploadSnapshotAction(f: FormData): Promise<{ ok?: string; 
 export async function startTimelineAction(f: FormData) {
   const u = await requireUser();
   const id = s(f, "id");
-  if (!u.can("interviews", "EDIT")) back(`/interviews/${id}`, { e: "You cannot start timelines" });
+  const to = f.get("back") === "marketing" ? "/marketing" : `/interviews/${id}`;
+  if (!u.can("interviews", "EDIT")) back(to, { e: "You cannot start timelines" });
   await attachChain(id, { createdById: u.id });
   revalidatePath("/", "layout");
-  back(`/interviews/${id}`, { ok: "Timeline started. The writer has been told." });
+  back(to, { ok: "Timeline started. The writer has been told." });
 }
