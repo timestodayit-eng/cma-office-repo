@@ -52,6 +52,7 @@ model User {
   notifications    Notification[]
   interviews       Interview[]        @relation("createdBy")
   attendance       Attendance[]
+  payslips         Payslip[]
 }
 
 model ModulePermission {
@@ -349,4 +350,28 @@ model Attendance {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+/// One row per person per month, created when an admin edits or finalises that month's pay.
+/// While DRAFT the numbers are worked out live from attendance; FINAL keeps a fixed copy.
+model Payslip {
+  id           String   @id @default(cuid())
+  userId       String
+  /// "2026-11"
+  month        String
+  status       String   @default("DRAFT")
+  /// Admin's own number of unpaid days; null = use the number worked out from attendance
+  unpaidDays   Decimal? @db.Decimal(5, 1)
+  bonus        Decimal  @default(0) @db.Decimal(12, 2)
+  deduction    Decimal  @default(0) @db.Decimal(12, 2)
+  note         String?
+  /// Fixed copy of every figure, written when the month is finalised
+  final        Json?
+  finalizedById String?
+  finalizedAt  DateTime?
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month])
+  @@index([month])
 }

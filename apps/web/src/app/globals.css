@@ -245,3 +245,9 @@ table.sheet.log{table-layout:fixed;width:max-content}
 .attrow summary,.attrow .sum{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;list-style:none;flex-wrap:wrap}
 .attrow .sum{cursor:default}.attrow summary::-webkit-details-marker{display:none}
 .btn.big{padding:14px 18px;font-size:16px;align-self:stretch;justify-content:center}
+
+/* Payroll */
+.payrows{display:flex;flex-direction:column}
+.payrows>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.payrows>div span{color:var(--muted)}
+.payrows .tot{border-bottom:0;font-size:16px;padding-top:10px}.payrows .tot span{color:var(--ink);font-weight:600}
