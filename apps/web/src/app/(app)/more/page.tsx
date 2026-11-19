@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { Icon, type NavItem } from "@/components/Nav";
 
 const MODS: [Parameters<Awaited<ReturnType<typeof requireUser>>["can"]>[0] | null, string, NavItem["icon"], string, string][] = [
+  [null, "/notices", "bell", "Notices", "#c0507a"],
   ["tasks", "/tasks", "tasks", "Tasks", "#4a74b0"],
   ["ai", "/command", "command", "Command Center", "#7363b3"],
   ["logsheet", "/logsheet", "sheet", "Log Sheet", "#3f9a83"],

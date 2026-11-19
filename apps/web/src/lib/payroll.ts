@@ -14,9 +14,11 @@ export type PayRules = {
   latesPerDay: number;
   /** Absence is counted only from this day on (the day attendance really started). "" = from the first check-in in the app. */
   countFrom: string;
+  /** Working hours of one day; one overtime hour is paid basic / daysInMonth / this. */
+  hoursPerDay: number;
   people: Record<string, PersonPay>;
 };
-export const DEFAULT_PAY: PayRules = { daysInMonth: 30, cutAbsent: true, latesPerDay: 3, countFrom: "", people: {} };
+export const DEFAULT_PAY: PayRules = { daysInMonth: 30, cutAbsent: true, latesPerDay: 3, countFrom: "", hoursPerDay: 8, people: {} };
 
 export async function getPayRules(): Promise<PayRules> {
   const s = await prisma.setting.findUnique({ where: { key: "payroll" } });
@@ -33,6 +35,7 @@ export type PayLine = {
   basic: number; allowance: number; hasPay: boolean;
   workDays: number; present: number; late: number; leave: number; absent: number;
   autoUnpaid: number; unpaidDays: number; edited: boolean;
+  otHours: number; hourRate: number; otPay: number;
   dayRate: number; cut: number; bonus: number; deduction: number; net: number;
   note: string | null; status: "DRAFT" | "FINAL";
 };
@@ -42,10 +45,12 @@ export const validMonth = (m: unknown): m is string => typeof m === "string" && 
 const round = (n: number) => Math.round(n);
 
 /** Pure sum, so the edit form and the saved slip always agree. */
-export function sumLine(basic: number, allowance: number, unpaidDays: number, bonus: number, deduction: number, daysInMonth: number) {
+export function sumLine(basic: number, allowance: number, unpaidDays: number, bonus: number, deduction: number, daysInMonth: number, otHours = 0, hoursPerDay = 8) {
   const dayRate = daysInMonth > 0 ? basic / daysInMonth : 0;
+  const hourRate = hoursPerDay > 0 ? dayRate / hoursPerDay : 0;
   const cut = round(dayRate * unpaidDays);
-  return { dayRate: round(dayRate), cut, net: round(basic + allowance + bonus - cut - deduction) };
+  const otPay = round(hourRate * otHours);
+  return { dayRate: round(dayRate), hourRate: Math.round(hourRate * 100) / 100, cut, otPay, net: round(basic + allowance + bonus + otPay - cut - deduction) };
 }
 
 /** Working days of the month for one person, up to `until`, starting at `from`. */
@@ -71,12 +76,13 @@ export async function paySheet(month: string, onlyUserId?: string): Promise<{ li
     prisma.user.findMany({ where: { active: true, external: false, ...(onlyUserId ? { id: onlyUserId } : {}) }, orderBy: { name: "asc" } }),
     prisma.attendance.findMany({ where: { date: { gte: start, lte: end }, ...(onlyUserId ? { userId: onlyUserId } : {}) } }),
     prisma.payslip.findMany({ where: { month, ...(onlyUserId ? { userId: onlyUserId } : {}) } }),
-    prisma.attendance.findFirst({ orderBy: { date: "asc" }, select: { date: true } }),
+    // demo days do not start the absence count
+    prisma.attendance.findFirst({ where: { OR: [{ note: null }, { note: { not: "DEMO" } }] }, orderBy: { date: "asc" }, select: { date: true } }),
   ]);
   const countFrom = /^\d{4}-\d{2}-\d{2}$/.test(rules.countFrom) ? new Date(rules.countFrom + "T00:00:00Z") : first?.date ?? null;
   const lines = people.map((p): PayLine => {
     const slip = slips.find((s) => s.userId === p.id);
-    if (slip?.status === "FINAL" && slip.final) return { ...(slip.final as unknown as PayLine), status: "FINAL" };
+    if (slip?.status === "FINAL" && slip.final) return { otHours: 0, hourRate: 0, otPay: 0, ...(slip.final as unknown as Partial<PayLine>), status: "FINAL" } as PayLine;
     const pay = rules.people[p.id];
     const mine = rows.filter((r) => r.userId === p.id);
     const days = countFrom ? workDays(month, timeFor(att, p.id).weeklyOff, countFrom, until) : [];
@@ -84,15 +90,16 @@ export async function paySheet(month: string, onlyUserId?: string): Promise<{ li
     const present = mine.filter((r) => r.status === "PRESENT").length;
     const late = mine.filter((r) => r.late).length;
     const leave = mine.filter((r) => r.status === "LEAVE").length;
-    const absent = days.filter((d) => { const r = byDay.get(d); return !r || r.status === "ABSENT"; }).length;
+    // days marked absent, plus working days with no entry at all since attendance started
+    const absent = mine.filter((r) => r.status === "ABSENT").length + days.filter((d) => !byDay.get(d)).length;
     const autoUnpaid = (rules.cutAbsent ? absent : 0) + (rules.latesPerDay > 0 ? Math.floor(late / rules.latesPerDay) : 0);
     const unpaidDays = slip?.unpaidDays != null ? Number(slip.unpaidDays) : autoUnpaid;
     const basic = pay?.basic ?? 0, allowance = pay?.allowance ?? 0;
-    const bonus = Number(slip?.bonus ?? 0), deduction = Number(slip?.deduction ?? 0);
+    const bonus = Number(slip?.bonus ?? 0), deduction = Number(slip?.deduction ?? 0), otHours = Number(slip?.overtimeHours ?? 0);
     return {
       userId: p.id, name: p.name, designation: p.designation, basic, allowance, hasPay: !!pay,
       workDays: days.length, present, late, leave, absent, autoUnpaid, unpaidDays, edited: slip?.unpaidDays != null,
-      ...sumLine(basic, allowance, unpaidDays, bonus, deduction, rules.daysInMonth), bonus, deduction,
+      otHours, ...sumLine(basic, allowance, unpaidDays, bonus, deduction, rules.daysInMonth, otHours, rules.hoursPerDay), bonus, deduction,
       note: slip?.note ?? null, status: "DRAFT",
     };
   });

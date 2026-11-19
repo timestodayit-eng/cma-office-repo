@@ -23,23 +23,25 @@ enum Access {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  shortName     String?
-  phone         String   @unique
-  email         String?  @unique
-  passwordHash  String
-  level         Level    @default(STAFF)
-  department    String?
-  designation   String?
-  jdCode        String?
-  whatsapp      String?
-  whatsappOn    Boolean  @default(true)
-  /** Freelance / support partner: no attendance, no payroll. */
-  external      Boolean  @default(false)
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  shortName    String?
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String
+  level        Level    @default(STAFF)
+  department   String?
+  designation  String?
+  jdCode       String?
+  whatsapp     String?
+  whatsappOn   Boolean  @default(true)
+  /**
+   * Freelance / support partner: no attendance, no payroll.
+   */
+  external     Boolean  @default(false)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   permissions      ModulePermission[]
   responsibilities Responsibility[]
@@ -53,6 +55,9 @@ model User {
   interviews       Interview[]        @relation("createdBy")
   attendance       Attendance[]
   payslips         Payslip[]
+  noticesSent      Notice[]
+  noticeReads      NoticeRead[]
+  ownTasks         OwnTask[]
   workSessions     WorkSession[]
   screenshots      Screenshot[]
 }
@@ -71,9 +76,13 @@ model Responsibility {
   id           String   @id @default(cuid())
   userId       String
   key          String
-  /** Company ids this applies to (empty = all). */
+  /**
+   * Company ids this applies to (empty = all).
+   */
   companies    String[]
-  /** Content types this applies to (uploader). Empty = all. */
+  /**
+   * Content types this applies to (uploader). Empty = all.
+   */
   contentTypes String[]
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -81,13 +90,15 @@ model Responsibility {
 }
 
 model Company {
-  id        String  @id @default(cuid())
-  name      String  @unique
-  short     String  @unique
-  /** Banglalink hotline series, e.g. ["80","50"]. */
+  id        String   @id @default(cuid())
+  name      String   @unique
+  short     String   @unique
+  /**
+   * Banglalink hotline series, e.g. ["80","50"].
+   */
   hotlines  String[]
   sheetTab  String?
-  sortOrder Int     @default(0)
+  sortOrder Int      @default(0)
 
   roles      CompanyRole[]
   interviews Interview[]
@@ -115,12 +126,12 @@ model Setting {
 
 /// One interview event. Also the row of the Recruitment Command Center sheet.
 model Interview {
-  id            String    @id @default(cuid())
-  companyId     String
-  country       String
-  interviewDate DateTime  @db.Date
-  title         String?
-  status        String    @default("Upcoming")
+  id               String   @id @default(cuid())
+  companyId        String
+  country          String
+  interviewDate    DateTime @db.Date
+  title            String?
+  status           String   @default("Upcoming")
   // Recruitment sheet numbers
   marketingPlanUsd Decimal? @db.Decimal(12, 2)
   totalCostUsd     Decimal? @db.Decimal(12, 2)
@@ -132,14 +143,18 @@ model Interview {
   notes            String?
   workType         String?
   details          String?
-  /** Banglalink panel: FIRST / SECOND / SINGLE (bridge pairs). */
+  /**
+   * Banglalink panel: FIRST / SECOND / SINGLE (bridge pairs).
+   */
   broadcastType    String?
-  /** Sheet sync: tab + row id so two-way sync can find it again. */
-  sheetRef      String?   @unique
-  bridgeWithId  String?
-  createdById   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  /**
+   * Sheet sync: tab + row id so two-way sync can find it again.
+   */
+  sheetRef         String?  @unique
+  bridgeWithId     String?
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   company   Company         @relation(fields: [companyId], references: [id])
   createdBy User?           @relation("createdBy", fields: [createdById], references: [id])
@@ -158,31 +173,33 @@ enum TaskStatus {
 }
 
 model Task {
-  id          String     @id @default(cuid())
-  interviewId String?
-  companyId   String?
-  chain       String?    // "video" for interview chains, null for a simple task
-  stepKey     String?
-  order       Int        @default(0)
-  title       String
-  description String?
-  /** Role that owns the step; for pool steps the assignee is set when someone claims it. */
-  role        String?
-  pool        Boolean    @default(false)
-  assigneeId  String?
-  checkerId   String?
-  status      TaskStatus @default(WAITING)
-  startDate   DateTime?  @db.Date
-  dueDate     DateTime?  @db.Date
-  startedAt   DateTime?
-  doneAt      DateTime?
-  scriptLink  String?
-  driveLink   String?
-  videoLink   String?
-  postLink    String?
+  id           String     @id @default(cuid())
+  interviewId  String?
+  companyId    String?
+  chain        String? // "video" for interview chains, null for a simple task
+  stepKey      String?
+  order        Int        @default(0)
+  title        String
+  description  String?
+  /**
+   * Role that owns the step; for pool steps the assignee is set when someone claims it.
+   */
+  role         String?
+  pool         Boolean    @default(false)
+  assigneeId   String?
+  checkerId    String?
+  status       TaskStatus @default(WAITING)
+  startDate    DateTime?  @db.Date
+  dueDate      DateTime?  @db.Date
+  startedAt    DateTime?
+  doneAt       DateTime?
+  scriptLink   String?
+  driveLink    String?
+  videoLink    String?
+  postLink     String?
   handoverNote String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   interview Interview?  @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   company   Company?    @relation(fields: [companyId], references: [id])
@@ -199,7 +216,7 @@ model TaskEvent {
   id        String   @id @default(cuid())
   taskId    String
   userId    String?
-  type      String   // created, started, done, already_done, claimed, qc_pass, qc_fail, reassigned, note
+  type      String // created, started, done, already_done, claimed, qc_pass, qc_fail, reassigned, note
   note      String?
   createdAt DateTime @default(now())
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -237,12 +254,14 @@ model Request {
 model Notification {
   id        String    @id @default(cuid())
   userId    String
-  kind      String    // task, request, qc, broadcast, hr
+  kind      String // task, request, qc, broadcast, hr
   title     String
   body      String?
   link      String?
   readAt    DateTime?
-  /** WhatsApp delivery (phase 2): null = not sent, queued, sent, failed */
+  /**
+   * WhatsApp delivery (phase 2): null = not sent, queued, sent, failed
+   */
   whatsapp  String?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -252,36 +271,36 @@ model Notification {
 
 /// Log Sheet: one row = one line of a day tab ("18 Nov").
 model LogRow {
-  id              String   @id @default(cuid())
-  date            DateTime @db.Date
-  sn              Int?
-  title           String?
-  deadline        String?
-  priority        String?
-  company         String?
-  mainCategory    String?
-  contentType     String?
-  scriptWriter    String?
-  scriptLink      String?
-  presenter       String?
-  cinematographer String?
-  videoEditor     String?
-  status          String?
-  thumbnail       String?
-  rawFile         String?
-  finalOutput     String?
-  comments        String?
-  uploadFacebook  String?
-  uploadYoutube   String?
-  uploadTiktok    String?
+  id               String   @id @default(cuid())
+  date             DateTime @db.Date
+  sn               Int?
+  title            String?
+  deadline         String?
+  priority         String?
+  company          String?
+  mainCategory     String?
+  contentType      String?
+  scriptWriter     String?
+  scriptLink       String?
+  presenter        String?
+  cinematographer  String?
+  videoEditor      String?
+  status           String?
+  thumbnail        String?
+  rawFile          String?
+  finalOutput      String?
+  comments         String?
+  uploadFacebook   String?
+  uploadYoutube    String?
+  uploadTiktok     String?
   platformFacebook String?
-  platformYoutube String?
-  platformTiktok  String?
-  finalComments   String?
-  rowIndex        Int      @default(0)
-  taskId          String?
-  sheetRef        String?  @unique
-  updatedAt       DateTime @updatedAt
+  platformYoutube  String?
+  platformTiktok   String?
+  finalComments    String?
+  rowIndex         Int      @default(0)
+  taskId           String?
+  sheetRef         String?  @unique
+  updatedAt        DateTime @updatedAt
 
   @@index([date])
   @@index([status])
@@ -318,8 +337,10 @@ model AuditLog {
 /// Changes made in the app waiting to be written to a Google Sheet (two-way sync).
 model SheetOutbox {
   id        String    @id @default(cuid())
-  sheet     String    // recruitment | broadcast | log
-  /** Entity key (sheetRef) so a sheet push does not overwrite a newer app change. */
+  sheet     String // recruitment | broadcast | log
+  /**
+   * Entity key (sheetRef) so a sheet push does not overwrite a newer app change.
+   */
   ref       String?
   op        Json
   tries     Int       @default(0)
@@ -333,22 +354,22 @@ model SheetOutbox {
 
 /// One row per person per day. Check-in is accepted only from the office WiFi (router MAC) or set by an admin.
 model Attendance {
-  id        String    @id @default(cuid())
-  userId    String
-  date      DateTime  @db.Date
-  checkIn   DateTime?
-  checkOut  DateTime?
-  late      Boolean   @default(false)
+  id         String    @id @default(cuid())
+  userId     String
+  date       DateTime  @db.Date
+  checkIn    DateTime?
+  checkOut   DateTime?
+  late       Boolean   @default(false)
   /// wifi = from the mobile app on office WiFi, admin = set by HR/admin
-  method    String    @default("wifi")
+  method     String    @default("wifi")
   /// PRESENT, LEAVE, ABSENT (the last two are set by an admin)
-  status    String    @default("PRESENT")
-  bssid     String?
-  note      String?
+  status     String    @default("PRESENT")
+  bssid      String?
+  note       String?
   editedById String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([date])
@@ -357,42 +378,87 @@ model Attendance {
 /// One row per person per month, created when an admin edits or finalises that month's pay.
 /// While DRAFT the numbers are worked out live from attendance; FINAL keeps a fixed copy.
 model Payslip {
-  id           String   @id @default(cuid())
-  userId       String
+  id            String    @id @default(cuid())
+  userId        String
   /// "2026-11"
-  month        String
-  status       String   @default("DRAFT")
+  month         String
+  status        String    @default("DRAFT")
   /// Admin's own number of unpaid days; null = use the number worked out from attendance
-  unpaidDays   Decimal? @db.Decimal(5, 1)
-  bonus        Decimal  @default(0) @db.Decimal(12, 2)
-  deduction    Decimal  @default(0) @db.Decimal(12, 2)
-  note         String?
+  unpaidDays    Decimal?  @db.Decimal(5, 1)
+  bonus         Decimal   @default(0) @db.Decimal(12, 2)
+  deduction     Decimal   @default(0) @db.Decimal(12, 2)
+  /// Overtime hours of the month, paid at basic / days / hours per day
+  overtimeHours Decimal   @default(0) @db.Decimal(6, 1)
+  /// Made by "Add demo data"; removed with it
+  demo          Boolean   @default(false)
+  note          String?
   /// Fixed copy of every figure, written when the month is finalised
-  final        Json?
+  final         Json?
   finalizedById String?
-  finalizedAt  DateTime?
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  finalizedAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, month])
   @@index([month])
 }
 
+/// A notice from the CEO / admin to the whole team, a team, a company's people or chosen people.
+model Notice {
+  id        String       @id @default(cuid())
+  senderId  String
+  title     String
+  body      String
+  /// Who it was sent to, in words ("Everyone", "Production team", ...)
+  audience  String
+  createdAt DateTime     @default(now())
+  sender    User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reads     NoticeRead[]
+
+  @@index([createdAt])
+}
+
+/// One row per person who got the notice; readAt is set when they tick "Yes, I have read it".
+model NoticeRead {
+  id       String    @id @default(cuid())
+  noticeId String
+  userId   String
+  readAt   DateTime?
+  notice   Notice    @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, userId])
+  @@index([userId, readAt])
+}
+
+/// A task a person gives to themselves. Private: only that person sees it.
+model OwnTask {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  dueDate   DateTime? @db.Date
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, doneAt])
+}
+
 /// Work Monitor: one "Start work" to "Stop work" on the desktop app.
 /// Screenshots and activity are only recorded inside a session.
 model WorkSession {
-  id         String    @id @default(cuid())
+  id         String           @id @default(cuid())
   userId     String
-  startedAt  DateTime  @default(now())
+  startedAt  DateTime         @default(now())
   /// Null while working. Set by Stop work, or by the server when the app goes silent.
   endedAt    DateTime?
-  lastBeatAt DateTime  @default(now())
+  lastBeatAt DateTime         @default(now())
   /// stop = Stop work, lock = PC locked / slept, quit = app closed, silent = app stopped reporting, logout
   endReason  String?
   device     String?
-  activeSec  Int       @default(0)
-  idleSec    Int       @default(0)
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeSec  Int              @default(0)
+  idleSec    Int              @default(0)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   shots      Screenshot[]
   samples    ActivitySample[]
 

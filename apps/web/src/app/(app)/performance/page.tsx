@@ -58,7 +58,7 @@ export default async function Performance({ searchParams }: { searchParams: Prom
               <div key={l.userId} className="attrow"><div className="sum">
                 <span className="small mono muted" style={{ width: 18 }}>{l.total ? i + 1 : ""}</span>
                 <span className="av sm">{initials(l.name)}</span>
-                <span className="grow" style={{ minWidth: 150 }}><b>{l.name}</b><span className="small muted"> · {l.designation ?? ""}</span><br /><Roles l={l} /></span>
+                <span className="grow" style={{ minWidth: 150 }}><b>{l.name}</b><span className="small muted">{l.designation ?? ""}</span><Roles l={l} /></span>
                 {l.total ? <>
                   <span className="small" style={{ whiteSpace: "nowrap" }}><b>{l.finished}</b> finished · {l.open} open{l.dropped ? ` · ${l.dropped} dropped` : ""} · {l.days} days</span>
                   <Bar pct={l.pct} /><span className="small mono" style={{ width: 38, textAlign: "right" }}>{l.pct == null ? "—" : l.pct + "%"}</span>

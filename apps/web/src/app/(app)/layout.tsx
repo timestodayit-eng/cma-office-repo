@@ -8,6 +8,8 @@ import { initials, todayDhaka } from "@/lib/format";
 import { clock } from "@/lib/attendance";
 import { SideNav, MobileNav, ThemeButton, Icon, type NavItem } from "@/components/Nav";
 import { myBroadcastCount } from "@/lib/broadcast";
+import { unreadNotices } from "@/lib/notices";
+import { NoticeGate } from "@/components/NoticeGate";
 import { logoutAction } from "../actions";
 import { DesktopBar } from "@/components/Monitor";
 
@@ -21,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     prisma.notification.count({ where: { userId: u.id, readAt: null } }),
   ]);
 
+  const notices = await unreadNotices(u.id);
   const [bcTodo, att] = await Promise.all([
     u.can("broadcast") ? myBroadcastCount(u.id) : 0,
     prisma.attendance.findUnique({ where: { userId_date: { userId: u.id, date: todayDhaka() } } }),
@@ -29,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/", label: "Home", icon: "home" },
     { href: "/tasks", label: "My Tasks", icon: "tasks", count: myTodo },
     { href: "/command", label: "Command", icon: "command" },
+    { href: "/notices", label: "Notices", icon: "bell", count: notices.length },
     { href: "/profile", label: "Profile", icon: "profile" },
   ];
   const mods: [Parameters<typeof u.can>[0], NavItem][] = [
@@ -52,6 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="shell">
+      <NoticeGate notices={notices} />
       <SideNav items={items} />
       <div className="main">
         <header className="top">
