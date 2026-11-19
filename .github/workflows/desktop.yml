@@ -1,0 +1,48 @@
+# Builds the CMA Office Windows app (CMA-Office-Setup.exe) and puts it on the "Desktop app" release page.
+# Runs when the desktop app changes, or by hand.
+name: Desktop app
+
+on:
+  push:
+    branches: [main, phase-1-backend-web, claude/project-thread-v7znzz]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-app
+  cancel-in-progress: true
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - name: Build the installer
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CMA-Office-Setup
+          path: desktop/dist/CMA-Office-Setup.exe
+      - name: Put it on the release page
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view desktop-latest >/dev/null 2>&1 || gh release create desktop-latest --title "CMA Office Windows app" --notes "Latest build of the CMA Office Windows app with Work Monitor. Download CMA-Office-Setup.exe and run it. Windows may say 'Windows protected your PC': click More info, then Run anyway." --prerelease
+          gh release upload desktop-latest dist/CMA-Office-Setup.exe --clobber

@@ -1,0 +1,47 @@
+{
+  "name": "cma-office-desktop",
+  "productName": "CMA Office",
+  "version": "1.0.0",
+  "description": "CMA Office for Windows: the office app plus Work Monitor (Start work / Stop work).",
+  "author": "CMA Office",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/monitor.js && node --check src/setup-preload.js",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.cmaoffice.desktop",
+    "productName": "CMA Office",
+    "artifactName": "CMA-Office-Setup.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/tray-*.png",
+      "build/icon.png",
+      "build/notice.txt",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CMA Office",
+      "license": "build/notice.txt"
+    }
+  }
+}

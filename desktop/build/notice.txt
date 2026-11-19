@@ -1,0 +1,26 @@
+﻿CMA Office desktop app: Work Monitor notice / ওয়ার্ক মনিটর নোটিশ
+
+বাংলা
+এই অ্যাপে অফিসের সব কাজ করা যায়। সাথে Work Monitor আছে:
+- আপনি "Start work" চাপলে কাজের সময় শুরু হয়। "Stop work" চাপলে বা পিসি লক / স্লিপ হলে বন্ধ হয়।
+- কাজের সময়ে প্রতি ৫–১০ মিনিটে (এলোমেলো সময়ে) আপনার স্ক্রিনের একটি ছবি অফিসের সার্ভারে যায়।
+- কাজের সময়ে কোন অ্যাপ / উইন্ডো সামনে খোলা, আর আপনি কতক্ষণ কিবোর্ড-মাউস ছাড়া (idle) ছিলেন, তা জমা হয়।
+- কাজের সময়ে অ্যাডমিন আপনার স্ক্রিন লাইভ দেখতে পারেন। তখন অ্যাপে "Admin is viewing your screen" দেখাবে আর ট্রে আইকন লাল হবে।
+- ছবি ও তথ্য শুধু Work Monitor অ্যাডমিনরা (CEO ও HR/Admin) দেখতে পারেন। পুরনো ছবি নিয়মিত মুছে ফেলা হয়।
+- Start work-এর আগে বা Stop work-এর পরে কিছুই রেকর্ড হয় না।
+- কী চাপছেন (keylogging), পাসওয়ার্ড, ব্যক্তিগত মেসেজ আলাদা করে সংগ্রহ করা হয় না। তবে স্ক্রিনের ছবিতে যা খোলা থাকবে তা দেখা যাবে, তাই কাজের সময়ে ব্যক্তিগত জিনিস খুলবেন না।
+- কাজ চলাকালে ট্রেতে সবুজ আইকন থাকে, অ্যাপের উপরে "Working since ..." লেখা থাকে।
+
+English
+This app has every CMA Office feature, plus Work Monitor:
+- Press "Start work" when you begin. It stops when you press "Stop work" or the PC locks or sleeps.
+- While you are working, a picture of your screen is sent to the office server every 5-10 minutes, at a random moment.
+- While you are working, the app in front, its window title and your idle time (no keyboard or mouse) are recorded.
+- While you are working, an admin can view your screen live. You will see "Admin is viewing your screen" and the tray icon turns red.
+- Only the Work Monitor admins (the CEO and HR/Admin) can see the pictures and data. Old pictures are deleted regularly.
+- Nothing is recorded before Start work or after Stop work.
+- No keystrokes, passwords or private messages are collected. A screen picture shows whatever is open, so keep personal things closed while working.
+- While you are working, the tray icon is green and the app shows "Working since ...".
+
+By installing and using this app you confirm that you have read this notice.
+এই অ্যাপ ইনস্টল ও ব্যবহার করে আপনি জানাচ্ছেন যে এই নোটিশ পড়েছেন।
