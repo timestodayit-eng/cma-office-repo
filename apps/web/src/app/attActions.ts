@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { AttError, addOfficeWifi, checkIn, checkOut, clock, getAttRules, isLate, saveAttRules, timeFor } from "@/lib/attendance";
+import { applyLeave, cancelLeave, decideLeave } from "@/lib/leave";
 
 type Wifi = { bssid?: string; ssid?: string } | null;
 const s = (f: FormData, k: string) => (f.get(k)?.toString() ?? "").trim();
@@ -102,4 +103,40 @@ export async function attAdminSetAction(f: FormData) {
   await prisma.auditLog.create({ data: { userId: me!.id, action: "attendance.set", entity: "attendance", data: { userId, day, status: data.status } } });
   revalidatePath("/", "layout");
   back(tab, { ok: "Saved." });
+}
+
+/** Leave application: anyone with attendance applies; HR / CEO approve (paid or unpaid) or reject. */
+export async function leaveApplyAction(f: FormData) {
+  let msg: { e?: string; ok?: string };
+  try {
+    const u = await requireUser();
+    if (!u.can("attendance") || u.external) throw new AttError("Attendance is not turned on for you");
+    const r = await applyLeave(u.id, { from: s(f, "from"), to: s(f, "to"), type: s(f, "type"), reason: s(f, "reason") });
+    msg = { ok: `Sent. ${r.days} day${r.days > 1 ? "s" : ""} of leave asked. You will get a notification when it is answered.` };
+  } catch (err) { msg = fail(err); }
+  revalidatePath("/", "layout");
+  back("leave", msg);
+}
+
+export async function leaveDecideAction(how: "paid" | "unpaid" | "reject", f: FormData) {
+  let msg: { e?: string; ok?: string };
+  try {
+    const u = await admin();
+    if (how !== "paid" && how !== "unpaid" && how !== "reject") throw new AttError("Choose approve or reject.");
+    await decideLeave(s(f, "id"), u.id, { approve: how !== "reject", paid: how === "paid", note: s(f, "note") });
+    msg = { ok: how === "reject" ? "Rejected. The person is told." : `Approved as ${how === "paid" ? "paid" : "unpaid"} leave. Attendance and payroll are updated.` };
+  } catch (err) { msg = fail(err); }
+  revalidatePath("/", "layout");
+  back("leave", msg);
+}
+
+export async function leaveCancelAction(f: FormData) {
+  let msg: { e?: string; ok?: string };
+  try {
+    const u = await requireUser();
+    await cancelLeave(s(f, "id"), u.id, u.has("attendance"));
+    msg = { ok: "Cancelled." };
+  } catch (err) { msg = fail(err); }
+  revalidatePath("/", "layout");
+  back("leave", msg);
 }

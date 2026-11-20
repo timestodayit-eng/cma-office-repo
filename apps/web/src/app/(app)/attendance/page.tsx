@@ -5,7 +5,8 @@ import { fmtDay, todayDhaka, initials } from "@/lib/format";
 import { getAttRules, clock, dhakaMinutes, timeFor, DAY_NAMES } from "@/lib/attendance";
 import { Flash } from "@/components/TaskCard";
 import { AttButtons, SetOfficeWifi } from "@/components/AttButtons";
-import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction } from "@/app/attActions";
+import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction, leaveApplyAction, leaveCancelAction, leaveDecideAction } from "@/app/attActions";
+import { LEAVE_TYPES, leaveApprovers, rangeLabel } from "@/lib/leave";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const hhmm = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", hour: "2-digit", minute: "2-digit", hour12: false }).format(d) : "");
@@ -15,12 +16,14 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   // Team view, corrections, rules and office WiFi: only the people with the "Attendance admin" duty (and super admins).
   const admin = u.has("attendance");
-  const tab = (sp.tab === "team" || sp.tab === "rules") && admin ? sp.tab : "me";
+  const tab = sp.tab === "leave" ? "leave" : (sp.tab === "team" || sp.tab === "rules") && admin ? sp.tab : "me";
   const today = todayDhaka();
   const rules = await getAttRules();
+  const waiting = admin ? await prisma.leaveRequest.count({ where: { status: "PENDING", userId: { not: u.id } } }) : 0;
   const Tabs = (
     <div className="chips" style={{ marginBottom: 4 }}>
       <Link className="chip" href="/attendance" aria-current={tab === "me" ? "page" : undefined}>My day</Link>
+      <Link className="chip" href="/attendance?tab=leave" aria-current={tab === "leave" ? "page" : undefined}>Leave{waiting ? <span className="badge">{waiting}</span> : null}</Link>
       {admin && <Link className="chip" href="/attendance?tab=team" aria-current={tab === "team" ? "page" : undefined}>Team today</Link>}
       {admin && <Link className="chip" href="/attendance?tab=rules" aria-current={tab === "rules" ? "page" : undefined}>Rules</Link>}
     </div>
@@ -63,7 +66,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                   <span className="av sm">{initials(p.name)}</span>
                   <span className="grow"><b>{p.name}</b><span className="small muted">{[p.designation, rules.people?.[p.id] ? `${pt.start}–${pt.end}` : ""].filter(Boolean).join(" · ")}</span></span>
                   {!a ? <span className="pill p-grey">{off ? "Off day" : "Not in"}</span>
-                    : a.status === "LEAVE" ? <span className="pill p-violet">Leave</span>
+                    : a.status === "LEAVE" ? <span className="pill p-violet">{a.paidLeave === false ? "Leave · unpaid" : "Leave"}</span>
                     : a.status === "ABSENT" ? <span className="pill p-bad">Absent</span>
                     : <><span className={`pill ${a.late ? "p-amber" : "p-good"}`}>{a.late ? "Late" : "On time"}</span><span className="small mono">{clock(a.checkIn)}{a.checkOut ? ` – ${clock(a.checkOut)}` : ""}</span>{a.method === "admin" && <span className="pill p-grey">by admin</span>}</>}
                 </summary>
@@ -81,6 +84,118 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
             );
           })}
         </div>
+      </>
+    );
+  }
+
+  if (tab === "leave") {
+    const yearStart = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+    const [mine, pending, recent, approvers] = await Promise.all([
+      prisma.leaveRequest.findMany({ where: { userId: u.id }, orderBy: { fromDate: "desc" }, take: 30 }),
+      admin ? prisma.leaveRequest.findMany({ where: { status: "PENDING" }, orderBy: { fromDate: "asc" }, include: { user: { select: { name: true, designation: true } } } }) : [],
+      admin ? prisma.leaveRequest.findMany({ where: { status: { in: ["APPROVED", "REJECTED"] }, toDate: { gte: new Date(today.getTime() - 30 * 86400_000) } }, orderBy: { fromDate: "desc" }, take: 30, include: { user: { select: { name: true } } } }) : [],
+      leaveApprovers(),
+    ]);
+    const deciders = new Map((await prisma.user.findMany({ where: { id: { in: [...mine, ...recent].map((r) => r.decidedById).filter(Boolean) as string[] } }, select: { id: true, name: true } })).map((x) => [x.id, x.name]));
+    const usedPaid = mine.filter((r) => r.status === "APPROVED" && r.paid && r.fromDate >= yearStart).reduce((n, r) => n + r.days, 0);
+    const usedUnpaid = mine.filter((r) => r.status === "APPROVED" && r.paid === false && r.fromDate >= yearStart).reduce((n, r) => n + r.days, 0);
+    const status = (r: { status: string; paid: boolean | null }) =>
+      r.status === "PENDING" ? <span className="pill p-amber">Waiting</span>
+        : r.status === "APPROVED" ? <span className={`pill ${r.paid ? "p-good" : "p-violet"}`}>Approved · {r.paid ? "Paid" : "Unpaid"}</span>
+        : r.status === "REJECTED" ? <span className="pill p-bad">Not approved</span>
+        : <span className="pill p-grey">Cancelled</span>;
+    const names = approvers.filter((a) => a.id !== u.id).map((a) => a.name.replace(/^md\.?\s+/i, "").split(" ")[0]).join(" and ");
+    return (
+      <>
+        <h1 className="h1">Attendance</h1>
+        <Flash sp={sp} />
+        {Tabs}
+        {admin && (
+          <div className="card" style={{ gap: 0, padding: 0 }}>
+            <div style={{ padding: "12px 14px" }}><b>Waiting for your answer</b>{!pending.length && <p className="hint">No leave application is waiting.</p>}</div>
+            {pending.map((r) => (
+              <div key={r.id} className="leave-item">
+                <div className="row" style={{ gap: 10 }}>
+                  <span className="av sm">{initials(r.user.name)}</span>
+                  <span className="grow"><b>{r.user.name}</b><span className="small muted">{r.user.designation ?? ""}</span></span>
+                  <span className="pill p-pri">{r.days} day{r.days > 1 ? "s" : ""}</span>
+                </div>
+                <div><b>{rangeLabel(r.fromDate, r.toDate)}</b> · {LEAVE_TYPES[r.type] ?? r.type}</div>
+                <div className="leave-reason">{r.reason}</div>
+                {r.userId === u.id ? <p className="hint">Your own application. The other approver answers it.</p> : (
+                  <form className="leave-actions">
+                    <input type="hidden" name="id" value={r.id} />
+                    <input name="note" placeholder="Note to the person (optional)" className="inp" />
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {r.type !== "UNPAID" && <button className="btn sm primary" formAction={leaveDecideAction.bind(null, "paid")}>Approve · Paid</button>}
+                      <button className={`btn sm${r.type === "UNPAID" ? " primary" : ""}`} formAction={leaveDecideAction.bind(null, "unpaid")}>Approve · Unpaid</button>
+                      <button className="btn sm bad" formAction={leaveDecideAction.bind(null, "reject")}>Reject</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!u.external && (
+          <form action={leaveApplyAction} className="card">
+            <b>Apply for leave</b>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <label className="field">From<input type="date" name="from" required defaultValue={iso(new Date(today.getTime() + 86400_000))} className="inp" /></label>
+              <label className="field">To<input type="date" name="to" required defaultValue={iso(new Date(today.getTime() + 86400_000))} className="inp" /></label>
+              <label className="field">Type
+                <select name="type" className="inp" defaultValue="CASUAL">
+                  {Object.entries(LEAVE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="field">Reason<textarea name="reason" required rows={3} placeholder="Why do you need the leave?" className="inp" /></label>
+            <p className="hint">Weekly off days are not counted. {names ? `${names} will get a notification` : "HR will get a notification"} and decide paid or unpaid. You are told when it is answered.</p>
+            <button className="btn primary" style={{ alignSelf: "flex-start" }}>Send application</button>
+          </form>
+        )}
+        <div className="stats three">
+          <div className="stat"><b>{usedPaid}</b><span>Paid leave days this year</span></div>
+          <div className="stat"><b>{usedUnpaid}</b><span>Unpaid leave days</span></div>
+          <div className="stat"><b>{mine.filter((r) => r.status === "PENDING").length}</b><span>Waiting</span></div>
+        </div>
+        <div className="h2">My applications</div>
+        {mine.length ? (
+          <div className="card" style={{ gap: 0, padding: 0 }}>
+            {mine.map((r) => (
+              <div key={r.id} className="leave-item">
+                <div className="row" style={{ gap: 10 }}>
+                  <span className="grow"><b>{rangeLabel(r.fromDate, r.toDate)}</b> <span className="small muted">· {r.days} day{r.days > 1 ? "s" : ""} · {LEAVE_TYPES[r.type] ?? r.type}</span></span>
+                  {status(r)}
+                </div>
+                <div className="small muted">{r.reason}</div>
+                {r.decidedById && r.status !== "PENDING" && <div className="small">{r.status === "CANCELLED" ? "Cancelled" : "Answered"} by {deciders.get(r.decidedById) ?? "HR"}{r.decisionNote ? `: “${r.decisionNote}”` : ""}</div>}
+                {r.status === "PENDING" && (
+                  <form action={leaveCancelAction}><input type="hidden" name="id" value={r.id} /><button className="btn sm">Cancel application</button></form>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : <div className="empty">You have not applied for leave yet.</div>}
+        {admin && recent.length > 0 && (
+          <>
+            <div className="h2">Answered (last 30 days)</div>
+            <div className="card" style={{ gap: 0, padding: 0 }}>
+              {recent.map((r) => (
+                <div key={r.id} className="leave-item">
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="grow"><b>{r.user.name}</b> <span className="small muted">· {rangeLabel(r.fromDate, r.toDate)} · {r.days} day{r.days > 1 ? "s" : ""}</span></span>
+                    {status(r)}
+                  </div>
+                  <div className="small muted">{LEAVE_TYPES[r.type] ?? r.type} · by {deciders.get(r.decidedById ?? "") ?? "HR"}</div>
+                  {r.status === "APPROVED" && (
+                    <form action={leaveCancelAction}><input type="hidden" name="id" value={r.id} /><button className="btn sm">Cancel this leave</button></form>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </>
     );
   }
@@ -185,6 +300,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
         <div className="small muted">Your office time {my.start} – {my.end} · late after {my.graceMin} minutes</div>
         {mine?.checkIn && <div>In <b>{clock(mine.checkIn)}</b>{mine.checkOut ? <> · Out <b>{clock(mine.checkOut)}</b> · {Math.floor(worked(mine) / 60)}h {worked(mine) % 60}m</> : null}{mine.method === "admin" ? <span className="small muted"> · set by admin</span> : null}</div>}
         <AttButtons state={state} />
+        {!u.external && <Link href="/attendance?tab=leave" className="small" style={{ alignSelf: "flex-start" }}>Need a day off? Apply for leave →</Link>}
       </div>
       {admin && rules.wifi.length === 0 && (
         <div className="card">
@@ -204,7 +320,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
           {rows.map((r) => (
             <div key={r.id} className="attrow"><div className="sum">
               <span className="grow"><b>{fmtDay(r.date, { weekday: "short", day: "numeric", month: "short" })}</b></span>
-              {r.status !== "PRESENT" ? <span className={`pill ${r.status === "LEAVE" ? "p-violet" : "p-bad"}`}>{r.status === "LEAVE" ? "Leave" : "Absent"}</span>
+              {r.status !== "PRESENT" ? <span className={`pill ${r.status === "LEAVE" ? "p-violet" : "p-bad"}`}>{r.status === "LEAVE" ? (r.paidLeave === false ? "Leave · unpaid" : "Leave") : "Absent"}</span>
                 : <><span className="small mono">{clock(r.checkIn)}{r.checkOut ? ` – ${clock(r.checkOut)}` : ""}</span><span className={`pill ${r.late ? "p-amber" : "p-good"}`}>{r.late ? "Late" : "On time"}</span></>}
             </div></div>
           ))}

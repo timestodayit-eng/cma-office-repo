@@ -80,12 +80,12 @@ export async function backupTabs(full = true): Promise<{ name: string; rows: Cel
       const off = timeFor(attRules, l.userId).weeklyOff;
       grid.push([l.name, ...dayCols.map((d) => {
         const r = mine.get(d);
-        if (r) return r.status === "LEAVE" ? "Lv" : r.status === "ABSENT" ? "A" : r.late ? "L" : "P";
+        if (r) return r.status === "LEAVE" ? (r.paidLeave === false ? "ULv" : "Lv") : r.status === "ABSENT" ? "A" : r.late ? "L" : "P";
         return off.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay()) ? "-" : "";
       }), l.present, l.late, l.leave, l.absent]);
     }
     grid.push([""], ["Every entry"], ["Date", "Name", "Status", "Check in", "Check out", "Late", "How", "Note"]);
-    for (const r of att) grid.push([iso(r.date), name.get(r.userId) ?? "", r.status, r.checkIn ? clock(r.checkIn) : "", r.checkOut ? clock(r.checkOut) : "", r.late ? "Late" : "", r.method === "admin" ? "Set by admin" : "Office WiFi", r.note ?? ""]);
+    for (const r of att) grid.push([iso(r.date), name.get(r.userId) ?? "", r.status, r.checkIn ? clock(r.checkIn) : "", r.checkOut ? clock(r.checkOut) : "", r.late ? "Late" : "", r.method === "admin" ? "Set by admin" : r.method === "leave" ? "Leave application" : "Office WiFi", r.note ?? ""]);
     tabs.push({ name: `Attendance ${tabMonth(month)}`, rows: pad(grid) });
   }
 
