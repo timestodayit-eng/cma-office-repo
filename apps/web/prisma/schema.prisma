@@ -61,6 +61,7 @@ model User {
   ownTasks         OwnTask[]
   workSessions     WorkSession[]
   screenshots      Screenshot[]
+  devices          Device[]
 }
 
 model ModulePermission {
@@ -529,4 +530,38 @@ model ActivitySample {
 
   @@index([userId, at])
   @@index([sessionId])
+}
+
+/// A company desktop computer running the CMA Office app. One row per machine
+/// (by the stable deviceId the app stores). Used for IT asset tracking: who is
+/// logged in, when it was last online, and its last known area (from the public
+/// IP). Visible only to Work Monitor admins. This is disclosed, transparent
+/// tracking on company machines; it is not covert monitoring.
+model Device {
+  id           String    @id @default(cuid())
+  /// Stable id the desktop app generates once and keeps in its config.
+  deviceId     String    @unique
+  /// Computer name (os.hostname()).
+  machineName  String?
+  platform     String?
+  osVersion    String?
+  appVersion   String?
+  /// The person logged in to the app on this machine the last time it reported.
+  userId       String?
+  lastSeenAt   DateTime  @default(now())
+  /// Public IP the last report came from, and the area looked up from it.
+  publicIp     String?
+  city         String?
+  region       String?
+  country      String?
+  /// Approximate coordinates from the IP lookup (city-level, not GPS).
+  lat          Float?
+  lng          Float?
+  /// When the IP -> area lookup last ran, so we do not look up on every beat.
+  geoAt        DateTime?
+  createdAt    DateTime  @default(now())
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([lastSeenAt])
+  @@index([userId])
 }

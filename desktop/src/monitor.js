@@ -56,6 +56,19 @@ class Monitor {
     return j;
   }
 
+  /** Register this computer and report it is online + its area (from its IP).
+   *  Runs whenever the app is logged in, even when not working, so a lost or
+   *  stolen laptop can be found. Fails quietly when offline or not logged in. */
+  async reportDevice(info) {
+    if (!this.o.token()) return false;
+    try {
+      await this.api("device", info);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async start() {
     if (this.state.working) return this.state;
     try {
