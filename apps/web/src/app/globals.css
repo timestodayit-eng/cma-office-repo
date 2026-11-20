@@ -458,3 +458,12 @@ h1.h1,.brand b{background:var(--grad-text);-webkit-background-clip:text;backgrou
 .shotgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .shot{display:flex;flex-direction:column;gap:4px;color:var(--ink);text-decoration:none}
 .shot img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+
+/* Leave applications (Attendance → Leave) */
+.chip .badge{background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;border-radius:999px;padding:0 6px;margin-left:6px;line-height:17px;display:inline-block}
+.leave-item{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.leave-item:last-child{border-bottom:0}
+.leave-item form{align-self:flex-start}
+.leave-item .leave-actions{align-self:stretch;display:flex;flex-direction:column;gap:8px}
+.leave-reason{background:var(--panel2);border-radius:10px;padding:8px 10px;font-size:13.5px;white-space:pre-wrap}
+.leave-item .grow{display:flex;flex-direction:column;min-width:0}

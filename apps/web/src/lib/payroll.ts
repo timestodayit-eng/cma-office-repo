@@ -33,7 +33,7 @@ export async function savePayRules(patch: Partial<PayRules>) {
 export type PayLine = {
   userId: string; name: string; designation: string | null;
   basic: number; allowance: number; hasPay: boolean;
-  workDays: number; present: number; late: number; leave: number; absent: number;
+  workDays: number; present: number; late: number; leave: number; unpaidLeave?: number; absent: number;
   autoUnpaid: number; unpaidDays: number; edited: boolean;
   otHours: number; hourRate: number; otPay: number;
   dayRate: number; cut: number; bonus: number; deduction: number; net: number;
@@ -90,15 +90,17 @@ export async function paySheet(month: string, onlyUserId?: string): Promise<{ li
     const present = mine.filter((r) => r.status === "PRESENT").length;
     const late = mine.filter((r) => r.late).length;
     const leave = mine.filter((r) => r.status === "LEAVE").length;
+    // approved leave marked unpaid cuts one day each
+    const unpaidLeave = mine.filter((r) => r.status === "LEAVE" && r.paidLeave === false).length;
     // days marked absent, plus working days with no entry at all since attendance started
     const absent = mine.filter((r) => r.status === "ABSENT").length + days.filter((d) => !byDay.get(d)).length;
-    const autoUnpaid = (rules.cutAbsent ? absent : 0) + (rules.latesPerDay > 0 ? Math.floor(late / rules.latesPerDay) : 0);
+    const autoUnpaid = unpaidLeave + (rules.cutAbsent ? absent : 0) + (rules.latesPerDay > 0 ? Math.floor(late / rules.latesPerDay) : 0);
     const unpaidDays = slip?.unpaidDays != null ? Number(slip.unpaidDays) : autoUnpaid;
     const basic = pay?.basic ?? 0, allowance = pay?.allowance ?? 0;
     const bonus = Number(slip?.bonus ?? 0), deduction = Number(slip?.deduction ?? 0), otHours = Number(slip?.overtimeHours ?? 0);
     return {
       userId: p.id, name: p.name, designation: p.designation, basic, allowance, hasPay: !!pay,
-      workDays: days.length, present, late, leave, absent, autoUnpaid, unpaidDays, edited: slip?.unpaidDays != null,
+      workDays: days.length, present, late, leave, unpaidLeave, absent, autoUnpaid, unpaidDays, edited: slip?.unpaidDays != null,
       otHours, ...sumLine(basic, allowance, unpaidDays, bonus, deduction, rules.daysInMonth, otHours, rules.hoursPerDay), bonus, deduction,
       note: slip?.note ?? null, status: "DRAFT",
     };

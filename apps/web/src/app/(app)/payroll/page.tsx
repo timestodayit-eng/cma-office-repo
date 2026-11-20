@@ -25,7 +25,7 @@ function Slip({ l, month }: { l: PayLine; month: string }) {
           <div className="tot"><span>Net pay</span><b>{tk(l.net)}</b></div>
         </div>
       )}
-      <div className="small muted">Attendance this month: {l.present} present · {l.late} late · {l.leave} leave · {l.absent} absent</div>
+      <div className="small muted">Attendance this month: {l.present} present · {l.late} late · {l.leave} leave{l.unpaidLeave ? ` (${l.unpaidLeave} unpaid)` : ""} · {l.absent} absent</div>
       {l.note && <div className="small">Note: {l.note}</div>}
       {l.status !== "FINAL" && l.hasPay && <p className="hint">This is the running figure. It can change until HR makes the month final.</p>}
     </div>
