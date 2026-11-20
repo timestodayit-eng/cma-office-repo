@@ -62,6 +62,7 @@ model User {
   workSessions     WorkSession[]
   screenshots      Screenshot[]
   devices          Device[]
+  timeEntries      TimeEntry[]        @relation("timeOf")
 }
 
 model ModulePermission {
@@ -526,6 +527,10 @@ model ActivitySample {
   app       String?
   title     String?
   idle      Boolean     @default(false)
+  /// Seconds of this minute with any mouse or keyboard input (0-60). Only counts, never which keys. Null on rows from older app versions.
+  act       Int?
+  /// Website, worked out from the browser window title (youtube.com, docs.google.com, ...). Null when the app is not a browser.
+  site      String?
   session   WorkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([userId, at])
@@ -538,30 +543,54 @@ model ActivitySample {
 /// IP). Visible only to Work Monitor admins. This is disclosed, transparent
 /// tracking on company machines; it is not covert monitoring.
 model Device {
-  id           String    @id @default(cuid())
+  id          String    @id @default(cuid())
   /// Stable id the desktop app generates once and keeps in its config.
-  deviceId     String    @unique
+  deviceId    String    @unique
   /// Computer name (os.hostname()).
-  machineName  String?
-  platform     String?
-  osVersion    String?
-  appVersion   String?
+  machineName String?
+  platform    String?
+  osVersion   String?
+  appVersion  String?
   /// The person logged in to the app on this machine the last time it reported.
-  userId       String?
-  lastSeenAt   DateTime  @default(now())
+  userId      String?
+  lastSeenAt  DateTime  @default(now())
   /// Public IP the last report came from, and the area looked up from it.
-  publicIp     String?
-  city         String?
-  region       String?
-  country      String?
+  publicIp    String?
+  city        String?
+  region      String?
+  country     String?
   /// Approximate coordinates from the IP lookup (city-level, not GPS).
-  lat          Float?
-  lng          Float?
+  lat         Float?
+  lng         Float?
   /// When the IP -> area lookup last ran, so we do not look up on every beat.
-  geoAt        DateTime?
-  createdAt    DateTime  @default(now())
-  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  geoAt       DateTime?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([lastSeenAt])
   @@index([userId])
+}
+
+/// Changes to tracked time. MANUAL adds time (asked by the person, approved by a Work Monitor admin).
+/// CUT_IDLE removes idle time the person chose to discard; CUT_SHOT removes the 10 minutes around a
+/// screenshot the person deleted themselves (the Hubstaff rule). Cuts are APPROVED at once.
+model TimeEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  /// MANUAL | CUT_IDLE | CUT_SHOT
+  kind        String
+  from        DateTime
+  to          DateTime
+  sec         Int
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status      String    @default("APPROVED")
+  reason      String?
+  sessionId   String?
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation("timeOf", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, from])
+  @@index([status])
 }

@@ -28,7 +28,12 @@ export async function paySavePersonAction(f: FormData) {
   const r = await getPayRules();
   const people = { ...r.people };
   if (f.get("mode") === "clear") delete people[userId];
-  else people[userId] = { basic: money(f, "basic"), allowance: money(f, "allowance"), note: s(f, "note") || undefined };
+  else {
+    const hourly = f.get("payType") === "hourly" ? money(f, "hourly") : 0;
+    if (f.get("payType") === "hourly" && !hourly) back("tab=setup", { e: "Write the pay for one hour." });
+    if (!hourly && !money(f, "basic")) back("tab=setup", { e: "Write the basic salary." });
+    people[userId] = { basic: hourly ? 0 : money(f, "basic"), allowance: money(f, "allowance"), note: s(f, "note") || undefined, ...(hourly ? { hourly } : {}) };
+  }
   await savePayRules({ people });
   await prisma.auditLog.create({ data: { userId: me.id, action: "payroll.salary", entity: "user", data: { userId } } });
   revalidatePath("/payroll");

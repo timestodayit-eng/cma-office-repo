@@ -16,9 +16,22 @@ export type MonitorRules = {
   keepDays: number;
   /** Admins may open a live view of a working person's screen. */
   live: boolean;
+  /** Screenshots in every 10 minutes of tracked time (0 = no screenshots, at most 3). New desktop apps use this; minMin/maxMin stay for old ones. */
+  perTen: number;
+  /** Blur screenshots on the computer before they are sent. */
+  blur: boolean;
+  /** What happens to idle time: ask the person, keep it, or discard it. */
+  idleMode: "ask" | "keep" | "discard";
+  /** The person may delete their own screenshot; the 10 minutes around it are then removed from their time. */
+  staffDelete: boolean;
+  /** People may ask for manual time (e.g. a shoot away from the laptop); an admin approves it. */
+  manual: boolean;
 };
 
-export const DEFAULT_RULES: MonitorRules = { minMin: 5, maxMin: 10, idleMin: 5, keepDays: 30, live: true };
+export const DEFAULT_RULES: MonitorRules = {
+  minMin: 5, maxMin: 10, idleMin: 5, keepDays: 30, live: true,
+  perTen: 1, blur: false, idleMode: "ask", staffDelete: true, manual: true,
+};
 
 export async function getMonitorRules(): Promise<MonitorRules> {
   const v = (await prisma.setting.findUnique({ where: { key: "monitor" } }))?.value as Partial<MonitorRules> | undefined;

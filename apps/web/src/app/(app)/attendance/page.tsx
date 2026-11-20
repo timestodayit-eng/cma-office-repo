@@ -7,6 +7,7 @@ import { Flash } from "@/components/TaskCard";
 import { AttButtons, SetOfficeWifi } from "@/components/AttButtons";
 import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction, leaveApplyAction, leaveCancelAction, leaveDecideAction } from "@/app/attActions";
 import { LEAVE_TYPES, leaveApprovers, rangeLabel } from "@/lib/leave";
+import { workedByDay, sumDays, hm, pct } from "@/lib/timetrack";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const hhmm = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", hour: "2-digit", minute: "2-digit", hour12: false }).format(d) : "");
@@ -31,9 +32,10 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
 
   if (tab === "team") {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(sp.day ?? "") ? new Date(sp.day + "T00:00:00Z") : today;
-    const [people, rows] = await Promise.all([
+    const [people, rows, tracked] = await Promise.all([
       prisma.user.findMany({ where: { active: true, external: false }, orderBy: { name: "asc" } }),
       prisma.attendance.findMany({ where: { date: day } }),
+      workedByDay(day, day),
     ]);
     const by = new Map(rows.map((r) => [r.userId, r]));
     const off = rules.weeklyOff.includes(day.getUTCDay());
@@ -69,6 +71,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                     : a.status === "LEAVE" ? <span className="pill p-violet">{a.paidLeave === false ? "Leave · unpaid" : "Leave"}</span>
                     : a.status === "ABSENT" ? <span className="pill p-bad">Absent</span>
                     : <><span className={`pill ${a.late ? "p-amber" : "p-good"}`}>{a.late ? "Late" : "On time"}</span><span className="small mono">{clock(a.checkIn)}{a.checkOut ? ` – ${clock(a.checkOut)}` : ""}</span>{a.method === "admin" && <span className="pill p-grey">by admin</span>}</>}
+                  {(() => { const t = sumDays(tracked.get(p.id)); return t.sec > 0 ? <span className="small mono muted" title="Worked time from the desktop time tracker">⏱ {hm(t.sec)}{pct(t) != null ? ` · ${pct(t)}%` : ""}</span> : null; })()}
                 </summary>
                 <form action={attAdminSetAction} className="row" style={{ gap: 8, flexWrap: "wrap", padding: "0 14px 12px" }}>
                   <input type="hidden" name="userId" value={p.id} /><input type="hidden" name="date" value={iso(day)} />

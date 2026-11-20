@@ -16,7 +16,7 @@ function Slip({ l, month }: { l: PayLine; month: string }) {
       <div className="row"><b className="grow">Pay slip · {monthLabel(month)}</b><span className={`pill ${l.status === "FINAL" ? "p-good" : "p-amber"}`}>{l.status === "FINAL" ? "Final" : "Not final yet"}</span></div>
       {!l.hasPay && l.status !== "FINAL" ? <p className="hint">Your salary is not set in the app yet. HR sets it.</p> : (
         <div className="payrows">
-          <div><span>Basic salary</span><b>{tk(l.basic)}</b></div>
+          <div><span>{l.hourly ? `Pay for ${l.trackedHours ?? 0} tracked hours × ৳${l.hourly}` : "Basic salary"}</span><b>{tk(l.basic)}</b></div>
           {l.allowance > 0 && <div><span>Allowance</span><b>{tk(l.allowance)}</b></div>}
           {l.otPay > 0 && <div><span>Overtime ({l.otHours} hours × ৳{l.hourRate})</span><b>+ {tk(l.otPay)}</b></div>}
           {l.bonus > 0 && <div><span>Bonus</span><b>+ {tk(l.bonus)}</b></div>}
@@ -25,7 +25,7 @@ function Slip({ l, month }: { l: PayLine; month: string }) {
           <div className="tot"><span>Net pay</span><b>{tk(l.net)}</b></div>
         </div>
       )}
-      <div className="small muted">Attendance this month: {l.present} present · {l.late} late · {l.leave} leave{l.unpaidLeave ? ` (${l.unpaidLeave} unpaid)` : ""} · {l.absent} absent</div>
+      <div className="small muted">Attendance this month: {l.present} present · {l.late} late · {l.leave} leave{l.unpaidLeave ? ` (${l.unpaidLeave} unpaid)` : ""} · {l.absent} absent{l.trackedHours ? ` · ${l.trackedHours} hours tracked` : ""}</div>
       {l.note && <div className="small">Note: {l.note}</div>}
       {l.status !== "FINAL" && l.hasPay && <p className="hint">This is the running figure. It can change until HR makes the month final.</p>}
     </div>
@@ -87,12 +87,17 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
                 <summary>
                   <span className="av sm">{initials(p.name)}</span>
                   <span className="grow"><b>{p.name}</b><span className="small muted">{p.designation ?? ""}</span></span>
-                  {pay ? <span className="small mono">{tk(pay.basic)}{pay.allowance ? ` + ${tk(pay.allowance)}` : ""}</span> : <span className="pill p-amber">Not set</span>}
+                  {pay ? <span className="small mono">{pay.hourly ? `৳${pay.hourly} / hour` : tk(pay.basic)}{pay.allowance ? ` + ${tk(pay.allowance)}` : ""}</span> : <span className="pill p-amber">Not set</span>}
                 </summary>
                 <form action={paySavePersonAction} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 14px 14px" }}>
                   <input type="hidden" name="userId" value={p.id} />
+                  <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+                    <label className="row small" style={{ gap: 6 }}><input type="radio" name="payType" value="month" defaultChecked={!pay?.hourly} />Monthly salary</label>
+                    <label className="row small" style={{ gap: 6 }}><input type="radio" name="payType" value="hourly" defaultChecked={!!pay?.hourly} />By tracked hours (desktop time tracker)</label>
+                  </div>
                   <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                    <label className="field">Basic salary (৳ per month)<input name="basic" inputMode="numeric" defaultValue={pay?.basic ?? ""} className="inp" required /></label>
+                    <label className="field">Basic salary (৳ per month)<input name="basic" inputMode="numeric" defaultValue={pay?.hourly ? "" : pay?.basic ?? ""} className="inp" /></label>
+                    <label className="field">Or pay for one hour (৳)<input name="hourly" inputMode="numeric" defaultValue={pay?.hourly ?? ""} className="inp" /></label>
                     <label className="field">Fixed allowance (৳ per month)<input name="allowance" inputMode="numeric" defaultValue={pay?.allowance ?? ""} className="inp" /></label>
                   </div>
                   <label className="field">Note (for example what the allowance is for)<input name="note" defaultValue={pay?.note ?? ""} className="inp" /></label>
@@ -153,7 +158,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
           <details key={l.userId} className="attrow">
             <summary>
               <span className="av sm">{initials(l.name)}</span>
-              <span className="grow"><b>{l.name}</b><span className="small muted">{l.present} present · {l.late} late · {l.absent} absent</span></span>
+              <span className="grow"><b>{l.name}</b><span className="small muted">{l.present} present · {l.late} late · {l.absent} absent{l.trackedHours ? ` · ${l.trackedHours} h tracked` : ""}{l.hourly ? " · paid by the hour" : ""}</span></span>
               {l.status === "FINAL" ? <span className="pill p-good">Final</span> : l.edited || l.bonus || l.deduction || l.otHours ? <span className="pill p-pri">Edited</span> : null}
               <b className="mono">{l.hasPay || l.status === "FINAL" ? tk(l.net) : "—"}</b>
             </summary>

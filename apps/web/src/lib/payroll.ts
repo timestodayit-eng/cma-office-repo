@@ -3,8 +3,10 @@
 import { prisma } from "./db";
 import { getAttRules, timeFor, type AttRules } from "./attendance";
 import { todayDhaka } from "./format";
+import { workedByDay, sumDays } from "./timetrack";
 
-export type PersonPay = { basic: number; allowance: number; note?: string };
+/** hourly: paid by tracked hours (৳ per hour from the desktop time tracker) instead of a monthly basic. */
+export type PersonPay = { basic: number; allowance: number; note?: string; hourly?: number };
 export type PayRules = {
   /** A day's pay = basic / this. */
   daysInMonth: number;
@@ -36,6 +38,8 @@ export type PayLine = {
   workDays: number; present: number; late: number; leave: number; unpaidLeave?: number; absent: number;
   autoUnpaid: number; unpaidDays: number; edited: boolean;
   otHours: number; hourRate: number; otPay: number;
+  /** Hours worked this month by the desktop time tracker (manual time included, removed time taken out). */
+  trackedHours?: number; hourly?: number;
   dayRate: number; cut: number; bonus: number; deduction: number; net: number;
   note: string | null; status: "DRAFT" | "FINAL";
 };
@@ -71,13 +75,14 @@ export async function paySheet(month: string, onlyUserId?: string): Promise<{ li
   const end = new Date(Date.UTC(y, m, 0));
   const today = todayDhaka();
   const until = end < today ? end : today;
-  const [rules, att, people, rows, slips, first] = await Promise.all([
+  const [rules, att, people, rows, slips, first, tracked] = await Promise.all([
     getPayRules(), getAttRules(),
     prisma.user.findMany({ where: { active: true, external: false, ...(onlyUserId ? { id: onlyUserId } : {}) }, orderBy: { name: "asc" } }),
     prisma.attendance.findMany({ where: { date: { gte: start, lte: end }, ...(onlyUserId ? { userId: onlyUserId } : {}) } }),
     prisma.payslip.findMany({ where: { month, ...(onlyUserId ? { userId: onlyUserId } : {}) } }),
     // demo days do not start the absence count
     prisma.attendance.findFirst({ where: { OR: [{ note: null }, { note: { not: "DEMO" } }] }, orderBy: { date: "asc" }, select: { date: true } }),
+    workedByDay(start, until < start ? start : until, onlyUserId ? [onlyUserId] : undefined),
   ]);
   const countFrom = /^\d{4}-\d{2}-\d{2}$/.test(rules.countFrom) ? new Date(rules.countFrom + "T00:00:00Z") : first?.date ?? null;
   const lines = people.map((p): PayLine => {
@@ -94,15 +99,18 @@ export async function paySheet(month: string, onlyUserId?: string): Promise<{ li
     const unpaidLeave = mine.filter((r) => r.status === "LEAVE" && r.paidLeave === false).length;
     // days marked absent, plus working days with no entry at all since attendance started
     const absent = mine.filter((r) => r.status === "ABSENT").length + days.filter((d) => !byDay.get(d)).length;
-    const autoUnpaid = unpaidLeave + (rules.cutAbsent ? absent : 0) + (rules.latesPerDay > 0 ? Math.floor(late / rules.latesPerDay) : 0);
+    const trackedHours = Math.round((sumDays(tracked.get(p.id)).sec / 3600) * 100) / 100;
+    const hourly = pay?.hourly && pay.hourly > 0 ? pay.hourly : 0;
+    // Paid by the hour: the pay is the tracked hours, so absent and late days cut nothing more.
+    const autoUnpaid = hourly ? 0 : unpaidLeave + (rules.cutAbsent ? absent : 0) + (rules.latesPerDay > 0 ? Math.floor(late / rules.latesPerDay) : 0);
     const unpaidDays = slip?.unpaidDays != null ? Number(slip.unpaidDays) : autoUnpaid;
-    const basic = pay?.basic ?? 0, allowance = pay?.allowance ?? 0;
+    const basic = hourly ? Math.round(trackedHours * hourly) : pay?.basic ?? 0, allowance = pay?.allowance ?? 0;
     const bonus = Number(slip?.bonus ?? 0), deduction = Number(slip?.deduction ?? 0), otHours = Number(slip?.overtimeHours ?? 0);
     return {
       userId: p.id, name: p.name, designation: p.designation, basic, allowance, hasPay: !!pay,
       workDays: days.length, present, late, leave, unpaidLeave, absent, autoUnpaid, unpaidDays, edited: slip?.unpaidDays != null,
       otHours, ...sumLine(basic, allowance, unpaidDays, bonus, deduction, rules.daysInMonth, otHours, rules.hoursPerDay), bonus, deduction,
-      note: slip?.note ?? null, status: "DRAFT",
+      note: slip?.note ?? null, status: "DRAFT", trackedHours, hourly: hourly || undefined,
     };
   });
   return { lines, rules, att, countFrom };
