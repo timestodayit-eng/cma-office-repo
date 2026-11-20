@@ -1,6 +1,9 @@
-// Work Monitor engine: runs only between Start work and Stop work.
-//  - a screenshot at a random moment every minMin..maxMin minutes (all screens, compressed JPEG)
+// Work Monitor engine: runs only between Start work and Stop work (the timer).
+//  - screenshots: perTen pictures at random moments in every 10 minutes (all screens, compressed JPEG,
+//    blurred when the rules say so); the person gets a small notice after each one
+//  - every second: was there any mouse/keyboard input? (a count only, never which keys) -> activity %
 //  - every 5 seconds: idle time + the app in front; sent once a minute
+//  - idle: when the person comes back after an idle stretch, the rules keep it, discard it, or ask them
 //  - live view: while an admin's live page is open, a small picture every 1.5 seconds (never saved)
 const { desktopCapturer, powerMonitor, screen, net } = require("electron");
 const { spawn } = require("node:child_process");
@@ -12,11 +15,16 @@ const PING_MS = 4000;
 const LIVE_MS = 1500;
 
 class Monitor {
-  /** @param {{ server: () => string, token: () => string | null, onChange: (s: object) => void, onLiveStart: () => void, onAuthLost: () => void }} o */
+  /** @param {{ server: () => string, token: () => string | null, onChange: (s: object) => void, onLiveStart: () => void, onAuthLost: () => void,
+ *   onShot?: (at: Date) => void, askIdle?: (from: Date, to: Date) => Promise<boolean> }} o */
   constructor(o) {
     this.o = o;
     this.state = { working: false };
-    this.rules = { minMin: 5, maxMin: 10, idleMin: 5, live: true };
+    this.rules = { minMin: 5, maxMin: 10, idleMin: 5, live: true, perTen: 1, blur: false, idleMode: "ask" };
+    this.minuteAct = 0;
+    this.slotStart = 0; this.slotAct = 0; this.slotSec = 0;
+    this.idleFrom = null;
+    this.shotTimers = [];
     this.sessionId = null;
     this.timers = [];
     this.samples = [];
@@ -33,7 +41,7 @@ class Monitor {
   }
 
   set(patch) {
-    this.state = { ...this.state, ...patch, minMin: this.rules.minMin, maxMin: this.rules.maxMin };
+    this.state = { ...this.state, ...patch, minMin: this.rules.minMin, maxMin: this.rules.maxMin, perTen: this.rules.perTen };
     this.o.onChange(this.state);
   }
 
@@ -74,11 +82,13 @@ class Monitor {
     try {
       const r = await this.api("start", { device: os.hostname() });
       this.sessionId = r.sessionId;
-      if (r.rules) this.rules = r.rules;
+      if (r.rules) this.rules = { ...this.rules, ...r.rules };
       this.activeSec = 0; this.idleSec = 0; this.samples = [];
       this.resetMinute();
-      this.set({ working: true, since: r.startedAt || new Date().toISOString(), error: undefined, live: false, lastShotAt: undefined });
+      this.slotStart = 0; this.idleFrom = null;
+      this.set({ working: true, since: r.startedAt || new Date().toISOString(), error: undefined, live: false, lastShotAt: undefined, act: undefined, ...this.totals(r) });
       this.startForeground();
+      this.timers.push(setInterval(() => this.second(), 1000));
       this.timers.push(setInterval(() => this.tick(), TICK_MS));
       this.timers.push(setInterval(() => this.beat(), BEAT_MS));
       this.timers.push(setInterval(() => this.ping(), PING_MS));
@@ -102,6 +112,8 @@ class Monitor {
     for (const t of this.timers) { clearInterval(t); clearTimeout(t); }
     this.timers = [];
     clearTimeout(this.shotTimer);
+    for (const t of this.shotTimers) clearTimeout(t);
+    this.shotTimers = [];
     clearTimeout(this.liveTimer);
     this.liveOn = false;
     this.sessionId = null;
@@ -111,12 +123,37 @@ class Monitor {
   // ---------- activity ----------
 
   resetMinute() {
-    this.minute = new Map(); this.minuteIdle = 0; this.minuteTicks = 0; this.minuteStart = Date.now();
+    this.minute = new Map(); this.minuteIdle = 0; this.minuteTicks = 0; this.minuteStart = Date.now(); this.minuteAct = 0;
+  }
+
+  /** Today's / this week's worked seconds as the server counted them, and when. */
+  totals(r) {
+    return typeof r?.todaySec === "number" ? { todaySec: r.todaySec, weekSec: r.weekSec, totalsAt: new Date().toISOString() } : {};
+  }
+
+  /** Every second: any input in the last second? Only a yes/no count is kept. */
+  second() {
+    const now = Date.now();
+    const slot = Math.floor(now / 600_000) * 600_000;
+    if (slot !== this.slotStart) { this.slotStart = slot; this.slotAct = 0; this.slotSec = 0; }
+    const input = powerMonitor.getSystemIdleTime() < 1;
+    this.slotSec++;
+    if (input) { this.minuteAct++; this.slotAct++; }
+    if (this.slotSec % 10 === 0) {
+      const act = Math.round((this.slotAct / this.slotSec) * 100);
+      if (act !== this.state.act) this.set({ act });
+    }
   }
 
   tick() {
     const idleFor = powerMonitor.getSystemIdleTime();
     const idle = idleFor >= this.rules.idleMin * 60;
+    if (idle && !this.idleFrom) this.idleFrom = new Date(Date.now() - idleFor * 1000);
+    if (!idle && this.idleFrom) {
+      const from = this.idleFrom; const to = new Date(Date.now() - idleFor * 1000);
+      this.idleFrom = null;
+      this.idleBack(from, to);
+    }
     const sec = TICK_MS / 1000;
     if (idle) this.idleSec += sec; else this.activeSec += sec;
     this.minuteTicks++;
@@ -127,7 +164,7 @@ class Monitor {
       let best = null; let n = -1;
       for (const [k, v] of this.minute) if (v > n) { best = k; n = v; }
       const [app, title] = best ? JSON.parse(best) : ["", ""];
-      this.samples.push({ at: new Date(this.minuteStart).toISOString(), app, title, idle: this.minuteIdle * 2 > this.minuteTicks });
+      this.samples.push({ at: new Date(this.minuteStart).toISOString(), app, title, idle: this.minuteIdle * 2 > this.minuteTicks, act: Math.min(60, this.minuteAct) });
       if (this.samples.length > 120) this.samples.shift();
       this.resetMinute();
     }
@@ -140,7 +177,7 @@ class Monitor {
     this.activeSec = 0; this.idleSec = 0;
     try {
       const r = await this.api("beat", { sessionId: this.sessionId, samples, activeSec, idleSec });
-      if (r.rules) this.rules = r.rules;
+      if (r.rules) this.setRules(r.rules);
       if (r.ended) {
         // The server closed the session (internet was down for a while). Carry on in a new one.
         this.halt();
@@ -148,7 +185,7 @@ class Monitor {
         await this.start();
         return;
       }
-      this.set({ error: undefined });
+      this.set({ error: undefined, ...this.totals(r) });
       if (r.live) this.liveStart();
     } catch (e) {
       // Offline: keep the minutes and try again next time.
@@ -157,6 +194,29 @@ class Monitor {
       this.activeSec += activeSec; this.idleSec += idleSec;
       if (!e.auth) this.set({ error: "Offline. Will send when the internet is back." });
     }
+  }
+
+  setRules(next) {
+    const before = this.rules.perTen;
+    this.rules = { ...this.rules, ...next };
+    // Screenshot count changed: plan the pictures again from now.
+    if (this.sessionId && before !== this.rules.perTen) this.scheduleShot(false);
+  }
+
+  /** The person is back after an idle stretch. Keep, discard, or ask, as the rules say. */
+  async idleBack(from, to) {
+    const mode = this.rules.idleMode || "keep";
+    if (mode === "keep" || !this.sessionId || to - from < 60_000) return;
+    const sessionId = this.sessionId;
+    let keep = false;
+    if (mode === "ask") {
+      try { keep = this.o.askIdle ? await this.o.askIdle(from, to) : true; } catch { keep = true; }
+    }
+    if (keep) return;
+    try {
+      const r = await this.api("idle", { sessionId, from: from.toISOString(), to: to.toISOString() });
+      this.set(this.totals(r));
+    } catch { /* stays counted; an admin can fix it */ }
   }
 
   async ping() {
@@ -219,6 +279,9 @@ while ($true) {
 
   scheduleShot(first) {
     clearTimeout(this.shotTimer);
+    for (const t of this.shotTimers) clearTimeout(t);
+    this.shotTimers = [];
+    if (typeof this.rules.perTen === "number") return this.planBlock();
     const lo = Math.max(1, this.rules.minMin) * 60_000;
     const hi = Math.max(lo, this.rules.maxMin * 60_000);
     // The first picture comes within the first couple of minutes, then at random moments.
@@ -227,6 +290,24 @@ while ($true) {
       await this.shoot().catch(() => {});
       if (this.sessionId) this.scheduleShot(false);
     }, wait);
+  }
+
+  /** Hubstaff style: perTen pictures at random moments inside each 10-minute block of the clock. */
+  planBlock() {
+    if (!this.sessionId) return;
+    const now = Date.now();
+    const start = Math.floor(now / 600_000) * 600_000;
+    const end = start + 600_000;
+    const n = Math.max(0, Math.min(3, Math.round(this.rules.perTen)));
+    const part = 600_000 / Math.max(1, n);
+    for (let i = 0; i < n; i++) {
+      const lo = Math.max(now + 20_000, start + i * part);
+      const hi = start + (i + 1) * part - 5_000;
+      if (hi <= lo) continue;
+      const at = lo + Math.random() * (hi - lo);
+      this.shotTimers.push(setTimeout(() => { if (this.sessionId) this.shoot().catch(() => {}); }, at - now));
+    }
+    this.shotTimer = setTimeout(() => this.planBlock(), end - now + 100);
   }
 
   async capture(maxW, primaryOnly) {
@@ -245,7 +326,13 @@ while ($true) {
     const sources = await this.capture(1600, false);
     let i = 0;
     for (const s of sources.slice(0, 4)) {
-      const jpg = s.thumbnail.toJPEG(55);
+      let img = s.thumbnail;
+      if (this.rules.blur) {
+        // Blur on this computer, before anything is sent: shrink hard, then grow back.
+        const { width } = img.getSize();
+        img = img.resize({ width: Math.max(24, Math.round(width / 14)), quality: "good" }).resize({ width, quality: "good" });
+      }
+      const jpg = img.toJPEG(55);
       const fd = new FormData();
       fd.set("sessionId", this.sessionId);
       fd.set("takenAt", new Date().toISOString());
@@ -256,7 +343,10 @@ while ($true) {
       const r = await this.api("shot", fd).catch(() => null);
       if (r?.ended) return;
     }
-    if (sources.length) this.set({ lastShotAt: new Date().toISOString() });
+    if (sources.length) {
+      this.set({ lastShotAt: new Date().toISOString() });
+      if (this.o.onShot) this.o.onShot(new Date());
+    }
   }
 
   // ---------- live view ----------

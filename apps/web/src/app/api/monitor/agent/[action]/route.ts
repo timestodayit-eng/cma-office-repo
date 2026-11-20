@@ -5,6 +5,7 @@
 //   ping    every few seconds: only "is an admin watching live?"
 //   shot    one compressed screenshot (JPEG)
 //   frame   one live-view picture (kept in memory only, while an admin watches)
+//   idle    the person chose to discard an idle stretch (or the rules discard idle time by themselves)
 //   stop    Stop work (or PC locked / app closed)
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
@@ -14,6 +15,7 @@ import {
   liveWanted, putFrame, stopLive, SILENT_MS,
 } from "@/lib/monitor";
 import { clientIp, recordDevice } from "@/lib/device";
+import { siteOf, myTotals, cutTime } from "@/lib/timetrack";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,7 @@ const clip = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.t
 const isJpeg = (b: Buffer) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
 const bad = (msg: string, status = 400) => NextResponse.json({ error: msg }, { status });
 
-type Sample = { at?: string; app?: string; title?: string; idle?: boolean };
+type Sample = { at?: string; app?: string; title?: string; idle?: boolean; act?: number };
 
 export async function POST(req: Request, ctx: { params: Promise<{ action: string }> }) {
   const { action } = await ctx.params;
@@ -68,7 +70,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ action: string
     await prisma.workSession.updateMany({ where: { userId: u.id, endedAt: null }, data: { endedAt: new Date(), endReason: "restart" } });
     const s = await prisma.workSession.create({ data: { userId: u.id, device: clip(body.device, 80) } });
     await closeSilentSessions();
-    return NextResponse.json({ sessionId: s.id, startedAt: s.startedAt, rules });
+    return NextResponse.json({ sessionId: s.id, startedAt: s.startedAt, rules, ...(await myTotals(u.id)) });
   }
 
   if (action === "shot") {
@@ -114,14 +116,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ action: string
     return NextResponse.json({ live: true });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { sessionId?: string; samples?: Sample[]; activeSec?: number; idleSec?: number; reason?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    sessionId?: string; samples?: Sample[]; activeSec?: number; idleSec?: number; reason?: string; from?: string; to?: string;
+  };
 
   if (action === "beat") {
     const s = await liveSession(u.id, body.sessionId ?? "");
     if (!s) return NextResponse.json({ ended: true, rules });
     const samples = (Array.isArray(body.samples) ? body.samples : []).slice(0, 120).map((x) => {
       const at = new Date(x.at ?? "");
-      return { sessionId: s.id, userId: u.id, at: isNaN(at.getTime()) ? new Date() : at, app: clip(x.app, 80), title: clip(x.title, 200), idle: !!x.idle };
+      const app = clip(x.app, 80); const title = clip(x.title, 200);
+      const act = x.act == null || !Number.isFinite(Number(x.act)) ? null : Math.max(0, Math.min(60, Math.round(Number(x.act))));
+      return { sessionId: s.id, userId: u.id, at: isNaN(at.getTime()) ? new Date() : at, app, title, idle: !!x.idle, act, site: siteOf(app, title) };
     });
     const sec = (n: unknown) => Math.max(0, Math.min(3600, Math.round(Number(n) || 0)));
     await prisma.$transaction([
@@ -131,7 +137,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ action: string
         data: { lastBeatAt: new Date(), activeSec: { increment: sec(body.activeSec) }, idleSec: { increment: sec(body.idleSec) } },
       }),
     ]);
-    return NextResponse.json({ ok: true, live: rules.live && liveWanted(u.id), rules });
+    return NextResponse.json({ ok: true, live: rules.live && liveWanted(u.id), rules, ...(await myTotals(u.id)) });
+  }
+
+  if (action === "idle") {
+    // Discard an idle stretch: it leaves the person's time, with its screenshots and activity minutes.
+    const s = await prisma.workSession.findFirst({ where: { id: body.sessionId ?? "", userId: u.id } });
+    if (!s) return bad("No such work session");
+    const a = new Date(body.from ?? ""); const b = new Date(body.to ?? "");
+    if (isNaN(a.getTime()) || isNaN(b.getTime()) || b <= a) return bad("Bad time range");
+    const lo = new Date(Math.max(a.getTime(), s.startedAt.getTime()));
+    const hi = new Date(Math.min(b.getTime(), (s.endedAt ?? new Date()).getTime(), lo.getTime() + 12 * 3600_000));
+    const sec = await cutTime(u.id, "CUT_IDLE", lo, hi, s.id, "Idle time discarded");
+    return NextResponse.json({ ok: true, sec, ...(await myTotals(u.id)) });
   }
 
   if (action === "stop") {

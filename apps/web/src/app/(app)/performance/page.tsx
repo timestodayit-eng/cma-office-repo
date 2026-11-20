@@ -5,6 +5,7 @@ import { getSheetConfig } from "@/lib/outbox";
 import { performance, PERF_ROLES, type PerfLine } from "@/lib/performance";
 import { monthOf, validMonth } from "@/lib/payroll";
 import { SyncBar } from "@/components/SyncBar";
+import { workedByDay, sumDays, pct, hm, monthStartOf, addDays } from "@/lib/timetrack";
 
 const monthLabel = (m: string) => new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(m + "-01T00:00:00Z"));
 const shift = (m: string, by: number) => { const [y, mo] = m.split("-").map(Number); return new Date(Date.UTC(y, mo - 1 + by, 1)).toISOString().slice(0, 7); };
@@ -24,7 +25,17 @@ export default async function Performance({ searchParams }: { searchParams: Prom
   const month = validMonth(sp.month) ? sp.month : monthOf(todayDhaka());
   // The team list is for management and the Creative Lead; everyone else sees only their own.
   const team = u.level === "SUPER_ADMIN" || u.resp.has("creative_lead" as never);
-  const [{ lines, unknown, rows }, cfg] = await Promise.all([performance(month), getSheetConfig()]);
+  const mStart = monthStartOf(new Date(month + "-01T00:00:00Z"));
+  const mEnd = addDays(new Date(Date.UTC(mStart.getUTCFullYear(), mStart.getUTCMonth() + 1, 1)), -1);
+  const [{ lines, unknown, rows }, cfg, tracked] = await Promise.all([
+    performance(month), getSheetConfig(),
+    workedByDay(mStart, mEnd < todayDhaka() ? mEnd : todayDhaka(), team ? undefined : [u.id]),
+  ]);
+  /** Desktop time tracker: hours and activity % this month. */
+  const Track = ({ id }: { id: string }) => {
+    const t = sumDays(tracked.get(id));
+    return t.sec > 0 ? <span className="pill p-grey" title="Desktop time tracker this month">⏱ {hm(t.sec)}{pct(t) != null ? ` · ${pct(t)}% activity` : ""}</span> : null;
+  };
   const ranked = lines.filter((l) => l.total > 0);
   const me = lines.find((l) => l.userId === u.id);
   const myRank = ranked.findIndex((l) => l.userId === u.id) + 1;
@@ -47,6 +58,7 @@ export default async function Performance({ searchParams }: { searchParams: Prom
             <div className="stat"><b>{me.pct == null ? "—" : me.pct + "%"}</b><span>Finished of my work</span></div>
           </div>
           <Roles l={me} />
+          <div><Track id={u.id} /></div>
           {!me.total && <p className="hint">Your name is on no Log Sheet row this month.</p>}
         </div>
       )}
@@ -58,7 +70,7 @@ export default async function Performance({ searchParams }: { searchParams: Prom
               <div key={l.userId} className="attrow"><div className="sum">
                 <span className="small mono muted" style={{ width: 18 }}>{l.total ? i + 1 : ""}</span>
                 <span className="av sm">{initials(l.name)}</span>
-                <span className="grow" style={{ minWidth: 150 }}><b>{l.name}</b><span className="small muted">{l.designation ?? ""}</span><Roles l={l} /></span>
+                <span className="grow" style={{ minWidth: 150 }}><b>{l.name}</b><span className="small muted">{l.designation ?? ""}</span><Roles l={l} />{l.userId && <Track id={l.userId} />}</span>
                 {l.total ? <>
                   <span className="small" style={{ whiteSpace: "nowrap" }}><b>{l.finished}</b> finished · {l.open} open{l.dropped ? ` · ${l.dropped} dropped` : ""} · {l.days} days</span>
                   <Bar pct={l.pct} /><span className="small mono" style={{ width: 38, textAlign: "right" }}>{l.pct == null ? "—" : l.pct + "%"}</span>

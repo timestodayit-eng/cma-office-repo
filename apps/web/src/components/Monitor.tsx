@@ -3,7 +3,11 @@ import { useEffect, useRef, useState } from "react";
 
 // ---------- inside the desktop app: the Start work / Stop work bar ----------
 
-type DeskState = { working: boolean; since?: string; live?: boolean; lastShotAt?: string; error?: string; minMin?: number; maxMin?: number };
+type DeskState = {
+  working: boolean; since?: string; live?: boolean; lastShotAt?: string; error?: string; minMin?: number; maxMin?: number;
+  /** New desktop apps: screenshots per 10 minutes, activity % of this 10 minutes, today's and this week's worked seconds. */
+  perTen?: number; act?: number; todaySec?: number; weekSec?: number; totalsAt?: string;
+};
 type Desk = {
   authUser(): Promise<string | null>;
   setAuth(a: { token: string; userId: string; name: string }): Promise<void>;
@@ -14,12 +18,18 @@ type Desk = {
 };
 const desk = () => (typeof window === "undefined" ? undefined : (window as Window & { cmaDesktop?: Desk }).cmaDesktop);
 
+const hms = (sec: number) => {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+};
+const hm = (sec: number) => hms(sec).slice(0, -3);
 const t = (iso?: string) => (iso ? new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)) : "");
 
 /** Shown only inside the CMA Office desktop app (it adds window.cmaDesktop). */
 export function DesktopBar({ userId }: { userId: string }) {
   const [st, setSt] = useState<DeskState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [, setNow] = useState(0);
 
   useEffect(() => {
     const d = desk();
@@ -37,7 +47,19 @@ export function DesktopBar({ userId }: { userId: string }) {
     return () => off();
   }, [userId]);
 
+  useEffect(() => {
+    if (!st?.working) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [st?.working]);
+
   if (!st) return null;
+  const extra = st.working && st.totalsAt ? (Date.now() - new Date(st.totalsAt).getTime()) / 1000 : 0;
+  const today = typeof st.todaySec === "number" ? st.todaySec + extra : null;
+  const week = typeof st.weekSec === "number" ? st.weekSec + extra : null;
+  const shotsText = typeof st.perTen === "number"
+    ? (st.perTen > 0 ? `${st.perTen} screenshot${st.perTen > 1 ? "s" : ""} every 10 min` : "no screenshots")
+    : `screen pictures every ${st.minMin ?? 5}–${st.maxMin ?? 10} min`;
   const go = async (fn: "start" | "stop") => {
     setBusy(true);
     try { setSt(await desk()![fn]()); } finally { setBusy(false); }
@@ -47,12 +69,16 @@ export function DesktopBar({ userId }: { userId: string }) {
       <span className="dot" />
       {st.working ? (
         <span className="grow">
-          <b>Working since {t(st.since)}</b>
-          <span className="small"> · screen pictures every {st.minMin ?? 5}–{st.maxMin ?? 10} min{st.lastShotAt ? ` · last ${t(st.lastShotAt)}` : ""}</span>
+          <b>{today != null ? <span className="mono">Today {hms(today)}</span> : <>Tracking since {t(st.since)}</>}</b>
+          <span className="small">
+            {week != null && ` · week ${hm(week)}`}
+            {st.act != null && ` · activity ${st.act}%`}
+            {` · ${shotsText}`}{st.lastShotAt ? ` · last ${t(st.lastShotAt)}` : ""}
+          </span>
           {st.live && <span className="pill p-bad" style={{ marginLeft: 6 }}>Admin is viewing your screen</span>}
         </span>
       ) : (
-        <span className="grow"><b>Not working</b><span className="small"> · press Start work when you sit down to work. Nothing is recorded until then.</span></span>
+        <span className="grow"><b>Timer off</b>{today != null && <span className="small mono"> · today {hm(today)}</span>}<span className="small"> · press Start work when you sit down to work. Nothing is recorded until then.</span></span>
       )}
       {st.error && <span className="small" style={{ color: "var(--bad)" }}>{st.error}</span>}
       {st.working

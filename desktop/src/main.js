@@ -94,6 +94,21 @@ const monitor = new Monitor({
   },
   onLiveStart: () => notify("Admin is viewing your screen", "A Work Monitor admin opened the live view of your screen."),
   onAuthLost: () => { setToken(null); monitor.stop("logout"); },
+  // Staff always know when a picture was taken (Hubstaff does the same).
+  onShot: (at) => notify("Screenshot taken", `At ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. You can see your screenshots in My time.`),
+  askIdle: async (from, to) => {
+    const min = Math.round((to - from) / 60_000);
+    const t = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const r = await dialog.showMessageBox({
+      type: "question",
+      title: "You were idle",
+      message: `You were idle for ${min} minutes (${t(from)} – ${t(to)}).`,
+      detail: "Were you working, for example in a meeting or on a call? If not, this time is taken out of your tracked time, with its screenshots.",
+      buttons: ["I was working (keep the time)", "Remove this time"],
+      defaultId: 0, cancelId: 0, noLink: true,
+    });
+    return r.response === 0;
+  },
 });
 
 function notify(title, body) {
@@ -158,14 +173,23 @@ function trayIcon(kind) {
   return nativeImage.createFromPath(path.join(ROOT, "build", `tray-${kind}.png`));
 }
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+/** Today's worked time: the server's count plus the minutes since it was counted. */
+function todayText(s) {
+  if (typeof s.todaySec !== "number") return "";
+  const sec = s.todaySec + (s.working && s.totalsAt ? Math.max(0, (Date.now() - new Date(s.totalsAt).getTime()) / 1000) : 0);
+  const h = Math.floor(sec / 3600); const m = Math.floor((sec % 3600) / 60);
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
 
 function updateTray() {
   if (!tray) return;
   const s = monitor.state;
   tray.setImage(trayIcon(s.live ? "live" : s.working ? "work" : "idle"));
-  tray.setToolTip(s.live ? "CMA Office: admin is viewing your screen" : s.working ? `CMA Office: working since ${timeOf(s.since)} (screen pictures on)` : "CMA Office: not working (nothing recorded)");
+  const today = todayText(s);
+  tray.setToolTip(s.live ? "CMA Office: admin is viewing your screen" : s.working ? `CMA Office: tracking on since ${timeOf(s.since)}${today ? ` · today ${today}` : ""}${s.act != null ? ` · activity ${s.act}%` : ""}` : "CMA Office: timer off (nothing recorded)");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: s.live ? "● Admin is viewing your screen" : s.working ? `● Working since ${timeOf(s.since)}` : "Not working: nothing is recorded", enabled: false },
+    { label: s.live ? "● Admin is viewing your screen" : s.working ? `● Tracking on since ${timeOf(s.since)}` : "Timer off: nothing is recorded", enabled: false },
+    ...(today ? [{ label: `Today ${today}${s.act != null && s.working ? ` · activity ${s.act}%` : ""}`, enabled: false }] : []),
     ...(s.error ? [{ label: s.error, enabled: false }] : []),
     { type: "separator" },
     s.working

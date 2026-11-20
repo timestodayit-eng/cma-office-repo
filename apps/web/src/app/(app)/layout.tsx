@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/tasks", label: "My Tasks", icon: "tasks", count: myTodo },
     { href: "/command", label: "Command", icon: "command" },
     { href: "/notices", label: "Notices", icon: "bell", count: notices.length },
+    ...(!u.external ? [{ href: "/mytime", label: "My time", icon: "clock" } as NavItem] : []),
     { href: "/profile", label: "Profile", icon: "profile" },
   ];
   const mods: [Parameters<typeof u.can>[0], NavItem][] = [

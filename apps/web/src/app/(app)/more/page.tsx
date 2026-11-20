@@ -17,6 +17,7 @@ const MODS: [Parameters<Awaited<ReturnType<typeof requireUser>>["can"]>[0] | nul
   ["payroll", "/payroll", "payroll", "Payroll", "#8a6a2f"],
   ["performance", "/performance", "performance", "Performance", "#7363b3"],
   ["monitor", "/monitor", "monitor", "Work Monitor", "#a0522d"],
+  [null, "/mytime", "clock", "My time", "#3f7fd0"],
   [null, "/notifications", "bell", "Notifications", "#4a74b0"],
 ];
 
