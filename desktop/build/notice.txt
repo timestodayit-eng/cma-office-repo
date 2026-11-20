@@ -10,6 +10,7 @@
 - Start work-এর আগে বা Stop work-এর পরে কিছুই রেকর্ড হয় না।
 - কী চাপছেন (keylogging), পাসওয়ার্ড, ব্যক্তিগত মেসেজ আলাদা করে সংগ্রহ করা হয় না। তবে স্ক্রিনের ছবিতে যা খোলা থাকবে তা দেখা যাবে, তাই কাজের সময়ে ব্যক্তিগত জিনিস খুলবেন না।
 - কাজ চলাকালে ট্রেতে সবুজ আইকন থাকে, অ্যাপের উপরে "Working since ..." লেখা থাকে।
+- এটি অফিসের কম্পিউটার। অ্যাপ খোলা থাকলে (Start work না চাপলেও) এই কম্পিউটারের নাম, কে লগইন করা, শেষ কখন অনলাইন ছিল আর ইন্টারনেট সংযোগ থেকে আনুমানিক এলাকা (শহর/জেলা) অফিসের সার্ভারে যায় — হারানো বা চুরি হওয়া ল্যাপটপ খুঁজে পেতে। এটি GPS নয়, আর শুধু অ্যাডমিনরা দেখেন।
 
 English
 This app has every CMA Office feature, plus Work Monitor:
@@ -21,6 +22,7 @@ This app has every CMA Office feature, plus Work Monitor:
 - Nothing is recorded before Start work or after Stop work.
 - No keystrokes, passwords or private messages are collected. A screen picture shows whatever is open, so keep personal things closed while working.
 - While you are working, the tray icon is green and the app shows "Working since ...".
+- This is a company computer. Whenever the app is open (even without pressing Start work), it reports this computer's name, who is logged in, when it was last online and an approximate area (city/region) from the internet connection, to the office server — to help find a lost or stolen laptop. This is not GPS, and only the admins can see it.
 
 By installing and using this app you confirm that you have read this notice.
 এই অ্যাপ ইনস্টল ও ব্যবহার করে আপনি জানাচ্ছেন যে এই নোটিশ পড়েছেন।

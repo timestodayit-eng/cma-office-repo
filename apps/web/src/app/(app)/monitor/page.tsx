@@ -12,6 +12,17 @@ const DL = "https://github.com/timestodayit-eng/cma-office-repo/releases/tag/des
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const dhakaStart = (day: Date) => new Date(day.getTime() - 6 * 3600_000);
 const tm = (d: Date | null | undefined) => (d ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", hour: "numeric", minute: "2-digit", hour12: true }).format(d) : "");
+/** "3 minutes ago", "2 hours ago", "4 days ago" — for a device's last-online time. */
+function ago(d: Date): string {
+  const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} hour${h > 1 ? "s" : ""} ago`;
+  const days = Math.round(h / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
 
 export default async function Monitor({ searchParams }: { searchParams: Promise<{ tab?: string; user?: string; day?: string; live?: string; e?: string; ok?: string }> }) {
   const u = await requireUser();
@@ -20,10 +31,11 @@ export default async function Monitor({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   await closeSilentSessions();
   const rules = await getMonitorRules();
-  const tab = sp.live ? "live" : sp.user ? "person" : sp.tab === "settings" ? "settings" : "now";
+  const tab = sp.live ? "live" : sp.user ? "person" : sp.tab === "settings" ? "settings" : sp.tab === "devices" ? "devices" : "now";
   const Tabs = (
     <div className="chips" style={{ marginBottom: 4 }}>
       <Link className="chip" href="/monitor" aria-current={tab === "now" ? "page" : undefined}>Now</Link>
+      <Link className="chip" href="/monitor?tab=devices" aria-current={tab === "devices" ? "page" : undefined}>Devices</Link>
       <Link className="chip" href="/monitor?tab=settings" aria-current={tab === "settings" ? "page" : undefined}>Rules &amp; storage</Link>
       <a className="chip" href={DL} target="_blank" rel="noreferrer">Download the desktop app ↗</a>
     </div>
@@ -136,6 +148,49 @@ export default async function Monitor({ searchParams }: { searchParams: Promise<
               <button className="btn sm bad">Delete this day&apos;s screenshots of {p.name.split(" ")[0]}</button>
             </form>
           )}
+        </div>
+      </>
+    );
+  }
+
+  if (tab === "devices") {
+    const devices = await prisma.device.findMany({ orderBy: { lastSeenAt: "desc" } });
+    const people = await prisma.user.findMany({ where: { id: { in: devices.map((d) => d.userId).filter(Boolean) as string[] } }, select: { id: true, name: true } });
+    const name = new Map(people.map((p) => [p.id, p.name]));
+    const onlineN = devices.filter((d) => Date.now() - d.lastSeenAt.getTime() < SILENT_MS).length;
+    return (
+      <>
+        <h1 className="h1">Work Monitor</h1>
+        <Flash sp={sp} />
+        {Tabs}
+        <div className="stats">
+          <div className="stat"><b>{devices.length}</b><span>Company devices</span></div>
+          <div className="stat"><b>{onlineN}</b><span>Online now</span></div>
+        </div>
+        <p className="hint">Every computer with the CMA Office desktop app reports itself while the app is open — even when nobody has pressed Start work. Use this to find a lost or stolen office laptop by its last-online time and last known area. Area is from the internet connection (city level), not GPS.</p>
+        {devices.length === 0 && <p className="hint">No device has reported yet. Devices appear here after the desktop app is installed and someone logs in.</p>}
+        <div className="grid">
+          {devices.map((d) => {
+            const online = Date.now() - d.lastSeenAt.getTime() < SILENT_MS;
+            const place = [d.city, d.region, d.country].filter(Boolean).join(", ");
+            const maps = d.lat != null && d.lng != null ? `https://www.google.com/maps?q=${d.lat},${d.lng}` : place ? `https://www.google.com/maps?q=${encodeURIComponent(place)}` : null;
+            return (
+              <div key={d.id} className="card">
+                <div className="row" style={{ gap: 8 }}>
+                  <span className="grow"><b>{d.machineName || "Unknown computer"}</b>{d.platform ? <span className="small muted"> · {d.platform}{d.osVersion ? ` ${d.osVersion}` : ""}</span> : null}</span>
+                  {online ? <span className="pill p-good">Online</span> : <span className="pill p-grey">Offline</span>}
+                </div>
+                <div className="small muted">Last user: {d.userId ? name.get(d.userId) ?? "Former staff" : "—"}</div>
+                <div className="small muted">Last online: {online ? "now" : ago(d.lastSeenAt)} · {tm(d.lastSeenAt)}, {fmtDay(d.lastSeenAt)}</div>
+                <div className="small muted">
+                  Location: {place || "unknown"}
+                  {maps ? <> · <a href={maps} target="_blank" rel="noreferrer">map ↗</a></> : null}
+                </div>
+                {d.publicIp ? <div className="small muted mono">IP {d.publicIp}</div> : null}
+                {d.appVersion ? <div className="small muted">App v{d.appVersion}</div> : null}
+              </div>
+            );
+          })}
         </div>
       </>
     );
