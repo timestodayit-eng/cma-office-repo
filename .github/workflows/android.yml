@@ -1,10 +1,18 @@
-# Builds the CMA Office Android app (APK) and puts it on the "Android app" release page,
-# so it can be downloaded to a phone. Runs when the mobile app changes, or by hand.
+# Builds the CMA Office Android app and puts it on the "Android app" release page:
+#   CMA-Office.apk  install directly on a phone
+#   CMA-Office.aab  upload to Google Play Console (internal / closed testing)
+# Runs when the mobile app changes, or by hand.
+#
+# Play signing: add two repository secrets (Settings > Secrets and variables > Actions):
+#   ANDROID_KEYSTORE_BASE64    the upload keystore, base64 encoded
+#   ANDROID_KEYSTORE_PASSWORD  its password
+# Without them the APK is still built (debug key) but no AAB is made.
+# versionCode = the run number of this workflow, so every build is higher than the last.
 name: Android app
 
 on:
   push:
-    branches: [main, phase-1-backend-web]
+    branches: [main, phase-1-backend-web, "claude/**"]
     paths: ["mobile/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
@@ -35,20 +43,64 @@ jobs:
           java-version: 17
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Set the version number
+        run: |
+          node -e '
+            const fs = require("fs");
+            const a = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            a.expo.android.versionCode = Number(process.env.RUN);
+            a.expo.version = "1.0." + process.env.RUN;
+            fs.writeFileSync("app.json", JSON.stringify(a, null, 2));
+            console.log("versionCode", a.expo.android.versionCode, "version", a.expo.version);
+          '
+        env:
+          RUN: ${{ github.run_number }}
+      - name: Load the Play upload key
+        id: key
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$KS_PASS" ]; then
+            echo "::warning::Play upload key secrets are not set, so the APK uses the debug key and no AAB is built."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KS" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          echo "CMA_UPLOAD_STORE_FILE=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+          echo "CMA_UPLOAD_STORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+          echo "CMA_UPLOAD_KEY_ALIAS=upload" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
       - name: Make the Android project
         run: npx expo prebuild --platform android --no-install
       - name: Build the APK
         working-directory: mobile/android
         run: ./gradlew assembleRelease --no-daemon
-      - name: Name the file
-        run: cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/CMA-Office.apk"
+      - name: Build the AAB for Google Play
+        if: steps.key.outputs.signed == 'true'
+        working-directory: mobile/android
+        run: ./gradlew bundleRelease --no-daemon
+      - name: Name the files
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/CMA-Office.apk"
+          if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
+            cp android/app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/CMA-Office.aab"
+            keytool -printcert -jarfile "$RUNNER_TEMP/CMA-Office.aab" | grep -E "Owner|SHA256:" || true
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: CMA-Office-apk
-          path: ${{ runner.temp }}/CMA-Office.apk
+          name: CMA-Office-android
+          path: |
+            ${{ runner.temp }}/CMA-Office.apk
+            ${{ runner.temp }}/CMA-Office.aab
+          if-no-files-found: warn
       - name: Put it on the release page
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "CMA Office Android app" --notes "Latest build of the CMA Office Android app. Download CMA-Office.apk on the phone and install it." --prerelease
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "CMA Office Android app" --notes "Latest build of the CMA Office Android app. CMA-Office.apk: install on a phone. CMA-Office.aab: upload to Google Play Console." --prerelease
           gh release upload android-latest "$RUNNER_TEMP/CMA-Office.apk" --clobber
+          if [ -f "$RUNNER_TEMP/CMA-Office.aab" ]; then
+            gh release upload android-latest "$RUNNER_TEMP/CMA-Office.aab" --clobber
+          fi
+          gh release edit android-latest --notes "Build ${{ github.run_number }} (versionCode ${{ github.run_number }}) from ${GITHUB_SHA::7}. CMA-Office.apk: install on a phone. CMA-Office.aab: upload to Google Play Console (only present when the Play upload key is set)." 
