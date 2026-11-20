@@ -1,0 +1,34 @@
+﻿CMA Office desktop app: Work Monitor notice / ওয়ার্ক মনিটর নোটিশ
+
+বাংলা
+এই অ্যাপে অফিসের সব কাজ করা যায়। সাথে Work Monitor আছে:
+- আপনি "Start work" চাপলে কাজের সময় শুরু হয়। "Stop work" চাপলে বা পিসি লক / স্লিপ হলে বন্ধ হয়।
+- কাজের সময়ে প্রতি ১০ মিনিটে (এলোমেলো সময়ে, সাধারণত ১টি, সেটিং অনুযায়ী ০–৩টি) আপনার স্ক্রিনের ছবি অফিসের সার্ভারে যায়। প্রতিটি ছবির পরে ছোট নোটিফিকেশন আসে। নিজের সব ছবি CMA Office-এর "My time" পেজে দেখতে পারবেন।
+- কাজের সময়ে প্রতি সেকেন্ডে শুধু দেখা হয় কিবোর্ড বা মাউস চলেছে কিনা, তা থেকে অ্যাক্টিভিটি % হিসাব হয়। কোন কী চেপেছেন তা কখনো রেকর্ড হয় না।
+- কাজের সময়ে কোন অ্যাপ আর কোন ওয়েবসাইট (ব্রাউজারের ট্যাবের নাম থেকে) কতক্ষণ খোলা ছিল তা হিসাব হয়।
+- Idle থেকে ফিরলে অ্যাপ জিজ্ঞেস করতে পারে ওই সময় কাজ করছিলেন কিনা; না হলে সেই সময় আপনার ঘণ্টা থেকে বাদ যায়।
+- কাজের সময়ে কোন অ্যাপ / উইন্ডো সামনে খোলা, আর আপনি কতক্ষণ কিবোর্ড-মাউস ছাড়া (idle) ছিলেন, তা জমা হয়।
+- কাজের সময়ে অ্যাডমিন আপনার স্ক্রিন লাইভ দেখতে পারেন। তখন অ্যাপে "Admin is viewing your screen" দেখাবে আর ট্রে আইকন লাল হবে।
+- ছবি ও তথ্য শুধু Work Monitor অ্যাডমিনরা (CEO ও HR/Admin) দেখতে পারেন। পুরনো ছবি নিয়মিত মুছে ফেলা হয়।
+- Start work-এর আগে বা Stop work-এর পরে কিছুই রেকর্ড হয় না।
+- কী চাপছেন (keylogging), পাসওয়ার্ড, ব্যক্তিগত মেসেজ আলাদা করে সংগ্রহ করা হয় না। তবে স্ক্রিনের ছবিতে যা খোলা থাকবে তা দেখা যাবে, তাই কাজের সময়ে ব্যক্তিগত জিনিস খুলবেন না।
+- কাজ চলাকালে ট্রেতে সবুজ আইকন থাকে, অ্যাপের উপরে "Working since ..." লেখা থাকে।
+- এটি অফিসের কম্পিউটার। অ্যাপ খোলা থাকলে (Start work না চাপলেও) এই কম্পিউটারের নাম, কে লগইন করা, শেষ কখন অনলাইন ছিল আর ইন্টারনেট সংযোগ থেকে আনুমানিক এলাকা (শহর/জেলা) অফিসের সার্ভারে যায় — হারানো বা চুরি হওয়া ল্যাপটপ খুঁজে পেতে। এটি GPS নয়, আর শুধু অ্যাডমিনরা দেখেন।
+
+English
+This app has every CMA Office feature, plus Work Monitor:
+- Press "Start work" when you begin. It stops when you press "Stop work" or the PC locks or sleeps.
+- While you are working, pictures of your screen are sent to the office server at random moments in every 10 minutes (usually 1; 0-3 as the admin sets). You get a small notification after each picture, and you can see all your own pictures on the "My time" page.
+- While you are working, the app checks every second only whether the keyboard or mouse was used, to work out an activity %. Which keys you press is never recorded.
+- While you are working, the apps and websites (from the browser tab title) you use and for how long are recorded.
+- When you come back from idle, the app may ask whether you were working; if not, that time is removed from your hours.
+- While you are working, the app in front, its window title and your idle time (no keyboard or mouse) are recorded.
+- While you are working, an admin can view your screen live. You will see "Admin is viewing your screen" and the tray icon turns red.
+- Only the Work Monitor admins (the CEO and HR/Admin) can see the pictures and data. Old pictures are deleted regularly.
+- Nothing is recorded before Start work or after Stop work.
+- No keystrokes, passwords or private messages are collected. A screen picture shows whatever is open, so keep personal things closed while working.
+- While you are working, the tray icon is green and the app shows "Working since ...".
+- This is a company computer. Whenever the app is open (even without pressing Start work), it reports this computer's name, who is logged in, when it was last online and an approximate area (city/region) from the internet connection, to the office server — to help find a lost or stolen laptop. This is not GPS, and only the admins can see it.
+
+By installing and using this app you confirm that you have read this notice.
+এই অ্যাপ ইনস্টল ও ব্যবহার করে আপনি জানাচ্ছেন যে এই নোটিশ পড়েছেন।

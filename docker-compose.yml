@@ -1,0 +1,67 @@
+# On the VPS:  cp .env.example .env  (fill it in)  then  docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cma
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: cma
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cma"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cma:${DB_PASSWORD}@db:5432/cma
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      SEED_ON_START: ${SEED_ON_START:-1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_TEMPLATE: ${WHATSAPP_TEMPLATE:-cma_notice}
+      WHATSAPP_LANG: ${WHATSAPP_LANG:-en}
+      SHOTS_DIR: /data/shots
+    volumes:
+      # Work Monitor screenshots (compressed JPEGs). Admins delete them from the app.
+      - shots:/data/shots
+
+  # HTTPS in front of the app, free certificate from Let's Encrypt.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+
+  # Daily database backup into ./backups on the VPS (14 days kept).
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./docker/backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+
+volumes:
+  dbdata:
+  shots:
+  caddydata:
