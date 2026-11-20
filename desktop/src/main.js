@@ -3,6 +3,8 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, powerMonitor, safeStorage, nativeImage, dialog } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const os = require("node:os");
+const crypto = require("node:crypto");
 const { Monitor } = require("./monitor");
 
 const ROOT = path.join(__dirname, "..");
@@ -23,6 +25,46 @@ function save() {
   fs.mkdirSync(path.dirname(CONFIG()), { recursive: true });
   fs.writeFileSync(CONFIG(), JSON.stringify(cfg, null, 2));
 }
+/** A stable id for this computer, made once and kept in config.json. */
+function deviceId() {
+  if (!cfg.deviceId) { cfg.deviceId = crypto.randomUUID(); save(); }
+  return cfg.deviceId;
+}
+
+/** This computer's public IP, so the server can find its area even in direct mode
+ *  (no reverse proxy to set x-forwarded-for). Best effort; returns null on failure. */
+async function publicIp() {
+  try {
+    const { net } = require("electron");
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const r = await net.fetch("https://api.ipify.org?format=json", { signal: ctrl.signal }).finally(() => clearTimeout(t));
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j.ip === "string" ? j.ip : null;
+  } catch { return null; }
+}
+
+/** What this computer reports about itself (no personal data; disclosed tracking). */
+async function deviceInfo() {
+  return {
+    deviceId: deviceId(),
+    machineName: os.hostname(),
+    platform: process.platform,
+    osVersion: `${os.type()} ${os.release()}`,
+    appVersion: app.getVersion(),
+    reportedIp: await publicIp(),
+  };
+}
+
+let deviceTimer = null;
+/** Report this device now and every few minutes, while the app is logged in. */
+function startDeviceReports() {
+  const tick = async () => { if (getToken()) monitor.reportDevice(await deviceInfo()); };
+  tick();
+  if (!deviceTimer) deviceTimer = setInterval(tick, 3 * 60_000);
+}
+
 function getToken() {
   if (!cfg.token) return null;
   try {
@@ -154,6 +196,7 @@ ipcMain.handle("cma:setAuth", (_e, a) => {
   cfg.tokenUser = String(a.userId || ""); cfg.tokenName = String(a.name || "");
   save();
   updateTray();
+  startDeviceReports();
 });
 ipcMain.handle("cma:state", () => monitor.state);
 ipcMain.handle("cma:start", () => monitor.start());
@@ -195,7 +238,7 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("click", () => openMain(true));
     updateTray();
     if (!cfg.server || !cfg.consentAt) openSetup();
-    else openMain(!process.argv.includes("--hidden"));
+    else { openMain(!process.argv.includes("--hidden")); startDeviceReports(); }
 
     // Locking the PC or sleep ends the work session; the person presses Start work again.
     const pause = (why) => {

@@ -1,4 +1,5 @@
 // The door the CMA Office desktop app uses (Bearer token from /api/monitor/token).
+//   device  register this computer + report last-online and area (runs even when not working)
 //   start   Start work: opens a work session, answers the screenshot rules
 //   beat    every minute: activity (app in front, idle) + "is an admin watching live?"
 //   ping    every few seconds: only "is an admin watching live?"
@@ -12,6 +13,7 @@ import {
   agentUser, getMonitorRules, openSession, closeSilentSessions, saveShotFile, autoDelete,
   liveWanted, putFrame, stopLive, SILENT_MS,
 } from "@/lib/monitor";
+import { clientIp, recordDevice } from "@/lib/device";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ action: string
   const u = await agentUser(req);
   if (!u) return bad("Log in again in the CMA Office app.", 401);
   const rules = await getMonitorRules();
+
+  // Device report: the desktop app registers itself and its last-online + area,
+  // whether or not a work session is running. Disclosed IT asset tracking.
+  if (action === "device") {
+    const b = (await req.json().catch(() => ({}))) as {
+      deviceId?: string; machineName?: string; platform?: string; osVersion?: string; appVersion?: string; reportedIp?: string;
+    };
+    const deviceId = clip(b.deviceId, 100);
+    if (!deviceId) return bad("No device id");
+    // Prefer the IP the proxy forwarded (trusted). In direct mode there is no
+    // proxy header, so fall back to the IP the app reports about itself.
+    const ip = clientIp(req) ?? clip(b.reportedIp, 60);
+    await recordDevice({
+      deviceId,
+      userId: u.id,
+      machineName: clip(b.machineName, 100),
+      platform: clip(b.platform, 40),
+      osVersion: clip(b.osVersion, 80),
+      appVersion: clip(b.appVersion, 40),
+      ip,
+    });
+    return NextResponse.json({ ok: true });
+  }
 
   if (action === "start") {
     const body = (await req.json().catch(() => ({}))) as { device?: string };
