@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { AttError, addOfficeWifi, checkIn, checkOut, clock, getAttRules, isLate, saveAttRules, timeFor } from "@/lib/attendance";
+import { AttError, addOfficeWifi, checkIn, checkOut, clock, getAttRules, isLate, saveAttRules, timeFor, type Shot } from "@/lib/attendance";
+import { DEFAULT_TRACK, deleteSelfieFile, setSharing, trackOrder } from "@/lib/location";
 import { applyLeave, cancelLeave, decideLeave } from "@/lib/leave";
 
-type Wifi = { bssid?: string; ssid?: string } | null;
+type Wifi = { bssid?: string; ssid?: string; error?: string } | null;
+type Order = Awaited<ReturnType<typeof trackOrder>>;
 const s = (f: FormData, k: string) => (f.get(k)?.toString() ?? "").trim();
 const back = (tab: string, msg: { e?: string; ok?: string }): never =>
   redirect(`/attendance?tab=${tab}&${new URLSearchParams(msg as Record<string, string>)}`);
@@ -22,15 +24,63 @@ const fail = (err: unknown) => {
   return { e: "Something went wrong. Please try again." };
 };
 
-/** Check in or out. `wifi` comes from the mobile app, which reads the router's MAC ID. */
-export async function attCheckAction(kind: "in" | "out", wifi: Wifi): Promise<{ ok?: string; e?: string }> {
+/** Check in or out. `wifi` comes from the mobile app, which reads the router's MAC ID;
+ *  `shot` is the selfie + GPS when the rules ask for one. `track` tells the phone to start / stop live location. */
+export async function attCheckAction(kind: "in" | "out", wifi: Wifi, shot: Shot = null): Promise<{ ok?: string; e?: string; track?: Order }> {
   try {
     const u = await requireUser();
     if (!u.can("attendance") || u.external) throw new AttError("Attendance is not turned on for you");
-    const a = kind === "in" ? await checkIn(u.id, wifi) : await checkOut(u.id, wifi);
+    const a = kind === "in" ? await checkIn(u.id, wifi, shot) : await checkOut(u.id, wifi, shot);
+    if (kind === "out") await setSharing(u.id, "stopped", "Checked out");
     revalidatePath("/", "layout");
-    return { ok: kind === "in" ? `Checked in at ${clock(a.checkIn)}${a.late ? " (late)" : ""}.` : `Checked out at ${clock(a.checkOut)}.` };
+    const where = a.method === "field" ? " (field, away from the office)" : "";
+    return {
+      ok: kind === "in" ? `Checked in at ${clock(a.checkIn)}${a.late ? " (late)" : ""}${where}.` : `Checked out at ${clock(a.checkOut)}.`,
+      track: await trackOrder(u.id),
+    };
   } catch (err) { return fail(err); }
+}
+
+/** The phone answered the live-location notice: agreed (and started) or not. */
+export async function locConsentAction(agreed: boolean, why?: string) {
+  const u = await requireUser();
+  await setSharing(u.id, agreed ? "agreed" : "declined", agreed ? undefined : (why ?? "").slice(0, 120) || undefined);
+  revalidatePath("/attendance");
+}
+
+/** The person turned live location off themselves. The admin sees that it was turned off. */
+export async function locStopAction() {
+  const u = await requireUser();
+  await setSharing(u.id, "declined", "Turned off by the person");
+  revalidatePath("/attendance");
+}
+
+/** The person wants to share again: clears "turned off" and gives the phone a fresh order. */
+export async function locResumeAction(): Promise<Order> {
+  const u = await requireUser();
+  await prisma.locationStatus.updateMany({ where: { userId: u.id }, data: { declinedAt: null } });
+  return trackOrder(u.id);
+}
+
+/** Selfie + live-location rules (Attendance admins). */
+export async function attSaveLocRulesAction(f: FormData) {
+  try { await admin(); } catch { back("rules", { e: "Only HR / admin can do this" }); }
+  const n = (k: string, lo: number, hi: number, d: number) => { const v = Math.round(Number(s(f, k))); return Number.isFinite(v) && s(f, k) !== "" ? Math.min(hi, Math.max(lo, v)) : d; };
+  const selfie = s(f, "selfie");
+  await saveAttRules({
+    selfie: selfie === "in" || selfie === "inout" ? selfie : "off",
+    field: f.getAll("field").map(String),
+    track: {
+      on: f.get("trackOn") === "on",
+      who: s(f, "who") === "some" ? "some" : "all",
+      people: f.getAll("trackPeople").map(String),
+      everyMin: n("everyMin", 1, 30, DEFAULT_TRACK.everyMin),
+      afterEndMin: n("afterEndMin", 0, 600, DEFAULT_TRACK.afterEndMin),
+      keepDays: n("keepDays", 1, 365, DEFAULT_TRACK.keepDays),
+    },
+  });
+  revalidatePath("/", "layout");
+  back("rules", { ok: "Selfie and live location rules saved." });
 }
 
 export async function attAddWifiAction(wifi: Wifi): Promise<{ ok?: string; e?: string }> {
@@ -90,7 +140,9 @@ export async function attAdminSetAction(f: FormData) {
   const where = { userId_date: { userId, date } };
   const tab = `team&day=${day}`;
   if (status === "CLEAR") {
+    const old = await prisma.attendance.findUnique({ where, select: { selfieIn: true, selfieOut: true } });
     await prisma.attendance.deleteMany({ where: { userId, date } });
+    await deleteSelfieFile(old?.selfieIn); await deleteSelfieFile(old?.selfieOut);
     back(tab, { ok: "Cleared." });
   }
   const at = (k: string) => (/^\d{2}:\d{2}$/.test(s(f, k)) ? new Date(`${day}T${s(f, k)}:00+06:00`) : null);

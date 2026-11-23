@@ -63,6 +63,8 @@ model User {
   screenshots      Screenshot[]
   devices          Device[]
   timeEntries      TimeEntry[]        @relation("timeOf")
+  locationPoints   LocationPoint[]
+  locationStatus   LocationStatus?
 }
 
 model ModulePermission {
@@ -400,6 +402,16 @@ model Attendance {
   leaveId    String?
   /// For LEAVE days: false = unpaid leave (payroll cuts the day)
   paidLeave  Boolean?
+  /// Selfie pictures (file names under SHOTS_DIR/selfies) taken in the mobile app at check in / out
+  selfieIn   String?
+  selfieOut  String?
+  /// Phone GPS at check in / out (metres of accuracy in *Acc)
+  inLat      Float?
+  inLng      Float?
+  inAcc      Float?
+  outLat     Float?
+  outLng     Float?
+  outAcc     Float?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -593,4 +605,38 @@ model TimeEntry {
 
   @@index([userId, from])
   @@index([status])
+}
+
+/// Live location: one GPS point sent by the mobile app while the person is checked in.
+/// Only while checked in, with a notification on the phone, after the person agreed (see LocationStatus).
+model LocationPoint {
+  id        String   @id @default(cuid())
+  userId    String
+  at        DateTime
+  lat       Float
+  lng       Float
+  /// accuracy in metres
+  acc       Float?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
+  @@index([at])
+}
+
+/// Live location: the latest state per person (fast for the live map) and their consent.
+model LocationStatus {
+  userId     String    @id
+  consentAt  DateTime?
+  declinedAt DateTime?
+  /// true while the phone says it is sharing
+  sharing    Boolean   @default(false)
+  lastAt     DateTime?
+  lat        Float?
+  lng        Float?
+  acc        Float?
+  /// why it stopped last time (checked out, turned off on the phone, ...)
+  note       String?
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

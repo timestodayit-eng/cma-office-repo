@@ -12,6 +12,8 @@ import { unreadNotices } from "@/lib/notices";
 import { NoticeGate } from "@/components/NoticeGate";
 import { logoutAction } from "../actions";
 import { DesktopBar } from "@/components/Monitor";
+import { TrackSync } from "@/components/AttButtons";
+import { trackOrder } from "@/lib/location";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     u.can("broadcast") ? myBroadcastCount(u.id) : 0,
     prisma.attendance.findUnique({ where: { userId_date: { userId: u.id, date: todayDhaka() } } }),
   ]);
+  // Live location: tells the phone app (when this page runs inside it) to share or stop, as the rules say.
+  const track = u.can("attendance") && !u.external && att?.checkIn ? await trackOrder(u.id) : { on: false as const, why: "Not checked in" };
   const items: NavItem[] = [
     { href: "/", label: "Home", icon: "home" },
     { href: "/tasks", label: "My Tasks", icon: "tasks", count: myTodo },
@@ -71,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </header>
         <DesktopBar userId={u.id} />
+        <TrackSync order={track} />
         <main className="screen">{children}</main>
       </div>
       <MobileNav items={[
