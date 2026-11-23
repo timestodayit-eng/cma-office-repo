@@ -6,6 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getSheetConfig, patchSheetConfig, pullOps, ackOps, type SheetKind } from "@/lib/outbox";
 import { importRecruitment, importBroadcast, importLogDay, companyByName, type RecRow, type BlRow } from "@/lib/dataImport";
 import { backupTabs, saveBackupInfo } from "@/lib/backup";
+import { saveRecSheetTab } from "@/lib/recSheet";
 import { recFieldOf, findHeaderRow, parseSheetDate, logTabDate, truthy, type RecField } from "@/lib/sheetRules";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +109,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
         if (!company) { skipped.push(t.tab); continue; }
         if (sheet === "recruitment") {
           const r = await importRecruitment(company, recRows(rows), { full: true, chains: !!cfg.last?.recruitment });
+          // The same tab cell for cell, for the sheet-style Interview List.
+          await saveRecSheetTab(String(t.tab), rows);
           done.push(`${t.tab}: ${r.created} new, ${r.updated} updated${r.removed ? `, ${r.removed} removed` : ""}`);
         } else {
           const r = await importBroadcast(company, blRows(rows));

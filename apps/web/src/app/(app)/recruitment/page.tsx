@@ -85,6 +85,7 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
     body = (
       <>
         <nav className="seg">{companies.map((c) => <Link key={c.id} href={href(c.id, when)} aria-current={c.id === co?.id ? "page" : undefined}>{c.name.split(" ")[0]}</Link>)}</nav>
+        <Link href={`/interviews?tab=${co?.short ?? ""}`} className="btn sm" style={{ alignSelf: "flex-start" }}>▦ Open as sheet (all columns)</Link>
         <nav className="seg">{[["upcoming", "Upcoming"], ["done", "Done"], ["all", "All"]].map(([k, l]) => <Link key={k} href={href(co?.id ?? "", k)} aria-current={k === when ? "page" : undefined}>{l}</Link>)}</nav>
         {list.length ? (
           <div className="list">{list.map((r) => {
