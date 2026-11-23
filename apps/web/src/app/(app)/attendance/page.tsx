@@ -4,8 +4,10 @@ import { requireModule } from "@/lib/auth";
 import { fmtDay, todayDhaka, initials } from "@/lib/format";
 import { getAttRules, clock, dhakaMinutes, timeFor, DAY_NAMES } from "@/lib/attendance";
 import { Flash } from "@/components/TaskCard";
-import { AttButtons, SetOfficeWifi } from "@/components/AttButtons";
-import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction, leaveApplyAction, leaveCancelAction, leaveDecideAction } from "@/app/attActions";
+import { AttButtons, MyLocation, SetOfficeWifi } from "@/components/AttButtons";
+import { LiveMap } from "@/components/LiveMap";
+import { attAdminSetAction, attRemoveWifiAction, attSaveRulesAction, attSavePersonAction, attSaveLocRulesAction, leaveApplyAction, leaveCancelAction, leaveDecideAction } from "@/app/attActions";
+import { selfieFor, trackNow, trackRules, tracksUser } from "@/lib/location";
 import { LEAVE_TYPES, leaveApprovers, rangeLabel } from "@/lib/leave";
 import { workedByDay, sumDays, hm, pct } from "@/lib/timetrack";
 
@@ -17,7 +19,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   // Team view, corrections, rules and office WiFi: only the people with the "Attendance admin" duty (and super admins).
   const admin = u.has("attendance");
-  const tab = sp.tab === "leave" ? "leave" : (sp.tab === "team" || sp.tab === "rules") && admin ? sp.tab : "me";
+  const tab = sp.tab === "leave" ? "leave" : (sp.tab === "team" || sp.tab === "rules" || sp.tab === "map") && admin ? sp.tab : "me";
   const today = todayDhaka();
   const rules = await getAttRules();
   const waiting = admin ? await prisma.leaveRequest.count({ where: { status: "PENDING", userId: { not: u.id } } }) : 0;
@@ -26,9 +28,23 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
       <Link className="chip" href="/attendance" aria-current={tab === "me" ? "page" : undefined}>My day</Link>
       <Link className="chip" href="/attendance?tab=leave" aria-current={tab === "leave" ? "page" : undefined}>Leave{waiting ? <span className="badge">{waiting}</span> : null}</Link>
       {admin && <Link className="chip" href="/attendance?tab=team" aria-current={tab === "team" ? "page" : undefined}>Team today</Link>}
+      {admin && <Link className="chip" href="/attendance?tab=map" aria-current={tab === "map" ? "page" : undefined}>Live map</Link>}
       {admin && <Link className="chip" href="/attendance?tab=rules" aria-current={tab === "rules" ? "page" : undefined}>Rules</Link>}
     </div>
   );
+
+  if (tab === "map") {
+    const t = trackRules(rules);
+    return (
+      <>
+        <h1 className="h1">Attendance</h1>
+        <Flash sp={sp} />
+        {Tabs}
+        {!t.on && <div className="warn">Live location is off. Turn it on in <Link href="/attendance?tab=rules#location">Rules → Selfie &amp; live location</Link>. Check-in places and selfies still show here.</div>}
+        <LiveMap today={iso(today)} everyMin={t.everyMin} />
+      </>
+    );
+  }
 
   if (tab === "team") {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(sp.day ?? "") ? new Date(sp.day + "T00:00:00Z") : today;
@@ -70,7 +86,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                   {!a ? <span className="pill p-grey">{off ? "Off day" : "Not in"}</span>
                     : a.status === "LEAVE" ? <span className="pill p-violet">{a.paidLeave === false ? "Leave · unpaid" : "Leave"}</span>
                     : a.status === "ABSENT" ? <span className="pill p-bad">Absent</span>
-                    : <><span className={`pill ${a.late ? "p-amber" : "p-good"}`}>{a.late ? "Late" : "On time"}</span><span className="small mono">{clock(a.checkIn)}{a.checkOut ? ` – ${clock(a.checkOut)}` : ""}</span>{a.method === "admin" && <span className="pill p-grey">by admin</span>}</>}
+                    : <><span className={`pill ${a.late ? "p-amber" : "p-good"}`}>{a.late ? "Late" : "On time"}</span><span className="small mono">{clock(a.checkIn)}{a.checkOut ? ` – ${clock(a.checkOut)}` : ""}</span>{a.method === "admin" && <span className="pill p-grey">by admin</span>}{a.method === "field" && <span className="pill p-pri">field</span>}{a.selfieIn && <a href={`/api/attendance/selfie/${a.id}?k=in`} target="_blank" rel="noreferrer" title="Check-in selfie"><img src={`/api/attendance/selfie/${a.id}?k=in`} alt="Check-in selfie" className="selfie-thumb" /></a>}{a.selfieOut && <a href={`/api/attendance/selfie/${a.id}?k=out`} target="_blank" rel="noreferrer" title="Check-out selfie"><img src={`/api/attendance/selfie/${a.id}?k=out`} alt="Check-out selfie" className="selfie-thumb" /></a>}{a.inLat != null && <a className="small" href={`https://www.google.com/maps?q=${a.inLat},${a.inLng}`} target="_blank" rel="noreferrer" title="Where the person checked in">📍 map</a>}</>}
                   {(() => { const t = sumDays(tracked.get(p.id)); return t.sec > 0 ? <span className="small mono muted" title="Worked time from the desktop time tracker">⏱ {hm(t.sec)}{pct(t) != null ? ` · ${pct(t)}%` : ""}</span> : null; })()}
                 </summary>
                 <form action={attAdminSetAction} className="row" style={{ gap: 8, flexWrap: "wrap", padding: "0 14px 12px" }}>
@@ -205,6 +221,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
 
   if (tab === "rules") {
     const people = await prisma.user.findMany({ where: { active: true, external: false }, orderBy: { name: "asc" } });
+    const lt = trackRules(rules);
     const offNames = (d: number[]) => (d.length ? d.map((i) => DAY_NAMES[i].slice(0, 3)).join(", ") : "no off day");
     return (
       <>
@@ -236,6 +253,39 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
             {DAY_NAMES.map((d, i) => <label key={d} className="row small" style={{ gap: 4 }}><input type="checkbox" name="weeklyOff" value={i} defaultChecked={rules.weeklyOff.includes(i)} />{d}</label>)}
           </div>
           <button className="btn primary" style={{ alignSelf: "flex-start" }}>Save rules</button>
+        </form>
+        <form action={attSaveLocRulesAction} className="card" id="location">
+          <b>Selfie &amp; live location</b>
+          <label className="field">Selfie with the front camera
+            <select name="selfie" className="inp" defaultValue={rules.selfie ?? "off"} style={{ maxWidth: 320 }}>
+              <option value="off">Off</option>
+              <option value="in">At check in</option>
+              <option value="inout">At check in and check out</option>
+            </select>
+          </label>
+          <p className="hint">The selfie is saved with the time and the phone&apos;s location. You see it in Team today and on the Live map. Everyone needs the new CMA Office app first, so turn this on after they have updated.</p>
+          <details>
+            <summary><b>Field staff</b> <span className="small muted">· {(rules.field ?? []).length} chosen · may check in away from the office WiFi with a selfie + location</span></summary>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", paddingTop: 8 }}>
+              {people.map((p) => <label key={p.id} className="row small" style={{ gap: 4 }}><input type="checkbox" name="field" value={p.id} defaultChecked={(rules.field ?? []).includes(p.id)} />{p.name}</label>)}
+            </div>
+          </details>
+          <hr className="sep" />
+          <label className="row" style={{ gap: 8 }}><input type="checkbox" name="trackOn" defaultChecked={lt.on} /><b>Live location while checked in</b></label>
+          <p className="hint">The app sends the phone&apos;s location only between check in and check out, shows a notification on the phone the whole time, and asks the person to agree first. If someone turns it off, you see that on the Live map.</p>
+          <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+            <label className="field">Every (minutes)<input type="number" name="everyMin" min={1} max={30} defaultValue={lt.everyMin} className="inp" /></label>
+            <label className="field">Forgot to check out: stop after office end + (minutes)<input type="number" name="afterEndMin" min={0} max={600} defaultValue={lt.afterEndMin} className="inp" /></label>
+            <label className="field">Keep history (days)<input type="number" name="keepDays" min={1} max={365} defaultValue={lt.keepDays} className="inp" /></label>
+          </div>
+          <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+            <label className="row small" style={{ gap: 4 }}><input type="radio" name="who" value="all" defaultChecked={lt.who === "all"} />Everyone</label>
+            <label className="row small" style={{ gap: 4 }}><input type="radio" name="who" value="some" defaultChecked={lt.who === "some"} />Only these people:</label>
+          </div>
+          <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+            {people.map((p) => <label key={p.id} className="row small" style={{ gap: 4 }}><input type="checkbox" name="trackPeople" value={p.id} defaultChecked={lt.people.includes(p.id)} />{p.name}</label>)}
+          </div>
+          <button className="btn primary" style={{ alignSelf: "flex-start" }}>Save selfie &amp; location rules</button>
         </form>
         <div className="card" style={{ gap: 0, padding: 0 }}>
           <div style={{ padding: "12px 14px" }}>
@@ -284,6 +334,11 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const off = my.weeklyOff.includes(today.getUTCDay());
   const state = u.external ? "off" : mine?.checkOut || (mine && mine.status !== "PRESENT") ? "done" : mine?.checkIn ? "in" : "none";
   const worked = (r: (typeof rows)[number]) => (r.checkIn && r.checkOut ? Math.max(0, Math.round((r.checkOut.getTime() - r.checkIn.getTime()) / 60000)) : 0);
+  const myTrack = trackRules(rules);
+  const tracked = !u.external && tracksUser(myTrack, u.id);
+  const st = tracked ? await prisma.locationStatus.findUnique({ where: { userId: u.id } }) : null;
+  const offByMe = !!(st?.declinedAt && (!st.consentAt || st.declinedAt > st.consentAt));
+  const sharingNow = tracked && state === "in" && (await trackNow(u.id, rules)).ok;
   const lateNow = !mine && !off && dhakaMinutes(new Date()) > Number(my.start.slice(0, 2)) * 60 + Number(my.start.slice(3)) + my.graceMin;
   return (
     <>
@@ -302,7 +357,15 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
         </div>
         <div className="small muted">Your office time {my.start} – {my.end} · late after {my.graceMin} minutes</div>
         {mine?.checkIn && <div>In <b>{clock(mine.checkIn)}</b>{mine.checkOut ? <> · Out <b>{clock(mine.checkOut)}</b> · {Math.floor(worked(mine) / 60)}h {worked(mine) % 60}m</> : null}{mine.method === "admin" ? <span className="small muted"> · set by admin</span> : null}</div>}
-        <AttButtons state={state} />
+        {mine && (mine.selfieIn || mine.selfieOut) && (
+          <div className="row" style={{ gap: 8 }}>
+            {mine.selfieIn && <img src={`/api/attendance/selfie/${mine.id}?k=in`} alt="Your check-in selfie" className="selfie-thumb big" />}
+            {mine.selfieOut && <img src={`/api/attendance/selfie/${mine.id}?k=out`} alt="Your check-out selfie" className="selfie-thumb big" />}
+            {mine.method === "field" && <span className="pill p-pri">Field check-in</span>}
+          </div>
+        )}
+        <AttButtons state={state} selfie={selfieFor(rules, u.id)} />
+        {tracked && state !== "done" && <MyLocation status={offByMe ? "off-by-me" : sharingNow ? "on" : "waiting"} everyMin={myTrack.everyMin} canResume={state === "in"} />}
         {!u.external && <Link href="/attendance?tab=leave" className="small" style={{ alignSelf: "flex-start" }}>Need a day off? Apply for leave →</Link>}
       </div>
       {admin && rules.wifi.length === 0 && (

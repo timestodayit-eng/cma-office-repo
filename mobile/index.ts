@@ -1,5 +1,7 @@
 import { registerRootComponent } from 'expo';
 
+// The live-location task must be defined before the app starts (Android may start it on its own).
+import './locationTask';
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
