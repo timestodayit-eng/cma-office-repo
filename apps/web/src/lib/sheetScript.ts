@@ -144,6 +144,7 @@ function cmaApply_(op) {
   var sh = ss.getSheetByName(op.tab);
   if (!sh) throw new Error('Tab not found: ' + op.tab);
   if (op.type === 'rec.append') return cmaRecAppend_(sh, op.values);
+  if (op.type === 'rec.row') return cmaRecRow_(sh, op);
   if (op.type === 'bc.append') return cmaBcAppend_(sh, op.values);
   if (op.type === 'bc.tick') return cmaBcTick_(sh, op);
   throw new Error('Unknown change: ' + op.type);
@@ -221,6 +222,32 @@ function cmaRecAppend_(sh, v) {
   if (String(sh.getRange(row, 1).getValue()).trim() === '') sh.getRange(row, 1).setValue(v.agency);
   set('company name', v.co); set('country', v.country); set('interview date', cmaAsDate_(v.date));
   set('details', v.details); set('marketing plan $', v.mplan);
+  return row;
+}
+
+/**
+ * Cells typed in the app's Interview List. The row is checked first by its company name and
+ * interview date (as the sheet had them), so a row that moved in the sheet is found again.
+ * Only the cells changed in the app are written; finance cells and formulas are never touched.
+ */
+function cmaRecRow_(sh, op) {
+  var h = cmaHeaderCols_(sh), e = op.expect, row = op.row;
+  var key = function (r) {
+    if (r > sh.getLastRow()) return '|';
+    var co = String(sh.getRange(r, e.coCol).getValue()).trim().toLowerCase().replace(/\s+/g, ' ');
+    var d = sh.getRange(r, e.dateCol).getValue();
+    return co + '|' + (d instanceof Date ? Utilities.formatDate(d, CMA_TZ, 'yyyy-MM-dd') : String(d));
+  };
+  var want = String(e.co).trim().toLowerCase().replace(/\s+/g, ' ') + '|' + e.date;
+  if (key(row) !== want) {
+    row = e.co && e.date ? cmaFindRow_(sh, h, e.co, e.date) : 0;
+    if (!row) throw new Error('Row not found in ' + sh.getName() + ': ' + e.co + ' ' + e.date);
+  }
+  op.cells.forEach(function (c) {
+    var v = c.v;
+    if (c.t === 'date' && v) v = cmaAsDate_(v);
+    sh.getRange(row, c.c).setValue(v === null || v === undefined ? '' : v);
+  });
   return row;
 }
 

@@ -7,6 +7,7 @@ const MODS: [Parameters<Awaited<ReturnType<typeof requireUser>>["can"]>[0] | nul
   ["tasks", "/tasks", "tasks", "Tasks", "#4a74b0"],
   ["ai", "/command", "command", "Command Center", "#7363b3"],
   ["logsheet", "/logsheet", "sheet", "Log Sheet", "#3f9a83"],
+  ["interviews", "/interviews", "sheet", "Interview List", "#9b2d42"],
   ["marketing", "/marketing", "marketing", "Marketing", "#c0507a"],
   ["broadcast", "/broadcast", "broadcast", "Broadcast", "#b7792a"],
   ["recruitment", "/recruitment", "recruit", "Recruitment", "#5b7fc4"],
