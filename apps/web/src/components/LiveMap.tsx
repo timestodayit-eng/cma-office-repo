@@ -28,6 +28,16 @@ const ago = (s: string, now: number) => { const m = Math.round((now - new Date(s
 const ini = (n: string) => n.replace(/^md\.?\s+/i, "").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const DHAKA: [number, number] = [23.7806, 90.4078];
+const gmaps = (p: P) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+const gLink = (p: P) => `<br><a href="${gmaps(p)}" target="_blank" rel="noreferrer">Open in Google Maps ↗</a>`;
+/** The whole path as Google Maps directions (Google takes up to ~10 stops, so the path is thinned). */
+function gPath(pts: P[]) {
+  if (pts.length < 2) return pts[0] ? gmaps(pts[0]) : "";
+  const step = Math.max(1, Math.ceil(pts.length / 10));
+  const pick = pts.filter((_, i) => i % step === 0);
+  if (pick[pick.length - 1] !== pts[pts.length - 1]) pick.push(pts[pts.length - 1]);
+  return "https://www.google.com/maps/dir/" + pick.slice(0, 11).map((p) => `${p.lat},${p.lng}`).join("/");
+}
 
 export function LiveMap({ today, everyMin }: { today: string; everyMin: number }) {
   const box = useRef<HTMLDivElement>(null);
@@ -96,9 +106,9 @@ export function LiveMap({ today, everyMin }: { today: string; everyMin: number }
         const at = p.last && p.checkIn && new Date(p.last.at!).getTime() >= new Date(p.checkIn).getTime() ? p.last : null;
         if (at) {
           const live = p.sharing && !p.checkOut && now - new Date(at.at!).getTime() < freshMs;
-          pin(at, live ? "live" : "old", ini(p.name), `<b>${esc(p.name)}</b><br>${live ? "Live" : "Last seen"} ${t(at.at)} (${ago(at.at!, now)})${at.acc ? ` · ±${Math.round(at.acc)} m` : ""}${selfie(p.selfieIn)}`);
+          pin(at, live ? "live" : "old", ini(p.name), `<b>${esc(p.name)}</b><br>${live ? "Live" : "Last seen"} ${t(at.at)} (${ago(at.at!, now)})${at.acc ? ` · ±${Math.round(at.acc)} m` : ""}${gLink(at)}${selfie(p.selfieIn)}`);
         } else if (p.inAt) {
-          pin(p.inAt, "in", ini(p.name), `<b>${esc(p.name)}</b><br>Checked in here ${t(p.checkIn)}${p.method === "field" ? " (field)" : ""}${selfie(p.selfieIn)}`);
+          pin(p.inAt, "in", ini(p.name), `<b>${esc(p.name)}</b><br>Checked in here ${t(p.checkIn)}${p.method === "field" ? " (field)" : ""}${gLink(p.inAt)}${selfie(p.selfieIn)}`);
         }
       }
     }
@@ -119,11 +129,12 @@ export function LiveMap({ today, everyMin }: { today: string; everyMin: number }
       : !p.tracked ? <span className="pill p-grey">Not tracked</span>
       : <span className="pill p-grey" title={p.note ?? ""}>No location yet</span>;
     return (
-      <button key={p.id} type="button" className={`maprow${pick === p.id ? " on" : ""}`} onClick={() => { setPick(pick === p.id ? "" : p.id); fitted.current = false; }}>
+      <div key={p.id} role="button" tabIndex={0} className={`maprow${pick === p.id ? " on" : ""}`} onClick={() => { setPick(pick === p.id ? "" : p.id); fitted.current = false; }} onKeyDown={(e) => { if (e.key === "Enter") { setPick(pick === p.id ? "" : p.id); fitted.current = false; } }}>
         {p.selfieIn ? <img src={p.selfieIn} alt="" className="selfie-thumb" /> : <span className="av sm">{ini(p.name)}</span>}
         <span className="grow"><b>{p.name}</b><span className="small muted">In {t(p.checkIn)}{p.method === "field" ? " · field" : ""}{p.late ? " · late" : ""}</span></span>
         {state}
-      </button>
+        {(at ?? p.inAt) && <a className="small" href={gmaps((at ?? p.inAt)!)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open in Google Maps">📍</a>}
+      </div>
     );
   };
 
@@ -146,6 +157,7 @@ export function LiveMap({ today, everyMin }: { today: string; everyMin: number }
           <div className="small">
             {hist.points.length ? <>{hist.points.length} points · {t(hist.points[0].at)} – {t(hist.points[hist.points.length - 1].at)}</> : "No live location points for this day."}
             {hist.checkIn && <> · in {t(hist.checkIn)}</>}{hist.checkOut && <> · out {t(hist.checkOut)}</>}
+            {hist.points.length > 0 && <> · <a href={gmaps(hist.points[hist.points.length - 1])} target="_blank" rel="noreferrer">Last place in Google Maps ↗</a> · <a href={gPath(hist.points)} target="_blank" rel="noreferrer">Path in Google Maps ↗</a></>}
             {(hist.selfieIn || hist.selfieOut) && (
               <div className="row" style={{ gap: 8, marginTop: 6 }}>
                 {hist.selfieIn && <a href={hist.selfieIn} target="_blank" rel="noreferrer"><img src={hist.selfieIn} alt="Check-in selfie" className="selfie-thumb big" /></a>}
