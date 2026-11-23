@@ -20,7 +20,8 @@
         "ACCESS_WIFI_STATE",
         "ACCESS_NETWORK_STATE",
         "INTERNET"
-      ]
+      ],
+      "versionCode": 1
     },
     "scheme": "cmaoffice",
     "plugins": [
@@ -38,7 +39,8 @@
           "locationWhenInUsePermission": "CMA Office reads the WiFi router you are connected to, to confirm you are in the office when you check in. Your location is not saved."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withReleaseSigning"
     ]
   }
 }
