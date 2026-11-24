@@ -41,6 +41,9 @@ Khalid = `01700000001`). Change them in Users & Permissions.
 
 ## Put it on a VPS
 
+New VPS, own domain, room for more sites on the same server: see [DEPLOY-NEW-VPS.md](DEPLOY-NEW-VPS.md) (`install.sh` + shared proxy in `proxy/`).
+The manual steps below run the app with its own built-in Caddy (only this one site on the VPS).
+
 Any Ubuntu VPS with 2 GB RAM or more (Hetzner, DigitalOcean, Contabo...).
 
 ```bash

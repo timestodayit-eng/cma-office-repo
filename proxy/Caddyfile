@@ -1,0 +1,6 @@
+# Shared proxy. Do not put sites here: each site is its own file in ./sites (see add-site.sh).
+{
+	# email for Let's Encrypt notices (optional):  email you@example.com
+}
+
+import sites/*.caddy
