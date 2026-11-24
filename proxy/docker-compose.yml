@@ -1,0 +1,33 @@
+# One shared HTTPS proxy for every site on this VPS (CMA Office and any other site).
+# It owns ports 80/443 and gets a free Let's Encrypt certificate for each domain by itself.
+# Sites are files in ./sites (one <domain>.caddy each); add them with  sh add-site.sh
+#   docker compose up -d        (start, once)
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    extra_hosts:
+      # lets a site that runs straight on the VPS (not in Docker) be reached as host.docker.internal:<port>
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - ./www:/srv/www:ro
+      - data:/data
+      - config:/config
+    networks: [web]
+
+networks:
+  # Every site's container joins this network so the proxy can reach it by name.
+  web:
+    external: true
+    name: web
+
+volumes:
+  data:
+  config:
