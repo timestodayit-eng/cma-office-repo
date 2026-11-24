@@ -594,3 +594,19 @@ model TimeEntry {
   @@index([userId, from])
   @@index([status])
 }
+
+/**
+ * Recruitment sheet, cell for cell: every row of the three agency tabs as the sheet has it
+ * (row 1 = header). Filled by the sheet's pushes, shown as the sheet-style Interview List.
+ */
+model RecSheetRow {
+  id        String   @id @default(cuid())
+  tab       String
+  /** Sheet row number (1 = header row). */
+  row       Int
+  /** Cell values A.. (text, number or true/false; dates as yyyy-mm-dd). */
+  cells     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([tab, row])
+}

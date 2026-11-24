@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   const mods: [Parameters<typeof u.can>[0], NavItem][] = [
     ["logsheet", { href: "/logsheet", label: "Log Sheet", icon: "sheet" }],
+    ["interviews", { href: "/interviews", label: "Interview List", icon: "sheet" }],
     ["marketing", { href: "/marketing", label: "Marketing", icon: "marketing" }],
     ["broadcast", { href: "/broadcast", label: "Broadcast", icon: "broadcast", count: bcTodo }],
     ["recruitment", { href: "/recruitment", label: "Recruitment", icon: "recruit" }],

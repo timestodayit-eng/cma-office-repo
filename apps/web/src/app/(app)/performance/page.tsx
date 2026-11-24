@@ -42,7 +42,7 @@ export default async function Performance({ searchParams }: { searchParams: Prom
   return (
     <>
       <h1 className="h1">Performance</h1>
-      <SyncBar last={cfg.last?.log} label="the Log Sheet" />
+      <SyncBar last={cfg.last?.log} label="the Log Sheet" kind="log" />
       <div className="row" style={{ gap: 8 }}>
         <Link className="btn sm" href={`/performance?month=${shift(month, -1)}`}>‹</Link>
         <b>{monthLabel(month)}</b>

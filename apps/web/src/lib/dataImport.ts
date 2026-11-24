@@ -45,6 +45,18 @@ export async function companyByName(name: string) {
  */
 export async function importRecruitment(company: Company, rows: RecRow[], opts: { full?: boolean; chains?: boolean } = {}) {
   const skip = await pendingRefs();
+  // A row edited in the Interview List and not in the sheet yet: the sheet still has its old name/date,
+  // so neither the old nor the new key may be created, changed or removed from this push.
+  const tab = company.sheetTab ?? company.name;
+  const waiting = await prisma.sheetOutbox.findMany({ where: { sheet: "recruitment", sentAt: null, ref: { startsWith: `recrow:${tab}:` } } });
+  for (const w of waiting) {
+    const op = w.op as { row?: number; expect?: { co: string; date: string; coCol: number; dateCol: number } };
+    if (!op.expect) continue;
+    skip.add(recRef(company.short, op.expect.date, op.expect.co));
+    const now = await prisma.recSheetRow.findUnique({ where: { tab_row: { tab, row: op.row ?? 0 } } });
+    const c = (now?.cells as unknown[] | undefined) ?? [];
+    if (c.length) skip.add(recRef(company.short, String(c[op.expect.dateCol - 1] ?? ""), String(c[op.expect.coCol - 1] ?? "")));
+  }
   const seen = new Map<string, number>();
   const refs: string[] = [];
   let created = 0, updated = 0;

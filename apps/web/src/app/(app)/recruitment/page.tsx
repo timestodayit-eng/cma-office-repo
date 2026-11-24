@@ -4,7 +4,10 @@ import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { fmtDay, todayDhaka } from "@/lib/format";
 import { getSheetConfig } from "@/lib/outbox";
-import { SyncBar } from "@/components/SyncBar";
+import { SheetHeader } from "@/components/SheetHeader";
+import { loadRecTab, duplicateNames } from "@/lib/recSheet";
+import { recCols, recKeyCols, REC_TAB_STYLE } from "@/lib/recCols";
+import { RecGrid } from "@/components/RecGrid";
 import { AGENCY_COLOR } from "@/components/BcCard";
 
 const num = (v: number | null | undefined, d = 0) =>
@@ -19,7 +22,7 @@ function tot(list: Interview[]) {
 
 const TABS = [["overview", "Overview"], ["interviews", "Interviews"], ["monthly", "Monthly"], ["budget", "Budget"], ["finance", "Finance"]] as const;
 
-export default async function Recruitment({ searchParams }: { searchParams: Promise<{ tab?: string; co?: string; when?: string }> }) {
+export default async function Recruitment({ searchParams }: { searchParams: Promise<{ tab?: string; co?: string; when?: string; rt?: string }> }) {
   const u = await requireModule("recruitment");
   const sp = await searchParams;
   const tab = TABS.some(([k]) => k === sp.tab) ? sp.tab! : "overview";
@@ -41,8 +44,32 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
     </Link>
   );
 
+  const canConnect = u.level === "SUPER_ADMIN" && u.can("settings", "EDIT");
   let body: React.ReactNode;
   if (tab === "overview") {
+    // The Recruitment Google Sheet itself (same grid as Interview List / Log Sheet), shown before "Next 7 days".
+    const tabs = await Promise.all(companies.map((c) => loadRecTab(c.sheetTab ?? c.name, c.id)));
+    const at = Math.max(0, companies.findIndex((c) => c.short === sp.rt));
+    const st = tabs[at];
+    const soonEnd = new Date(today); soonEnd.setUTCDate(soonEnd.getUTCDate() + 7);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const sheet = st ? (
+      <SheetHeader kind="recruitment" title="Recruitment Google Sheet" last={cfg.last?.recruitment} canConnect={canConnect}>
+        <div className="gsb">
+          <RecGrid key={st.tab} tab={st.tab} rows={st.rows} cols={recCols(st.tab, st.header, { money: true })} keys={recKeyCols(st.header)}
+            today={iso(today)} soonEnd={iso(soonEnd)} dup={duplicateNames(tabs)}
+            canEdit={st.fromSheet && u.can("recruitment", "EDIT")} canAdd={u.can("interviews", "EDIT")} />
+        </div>
+        <div className="gst">
+          <span className="gsm">☰</span>
+          {companies.map((c, i) => (
+            <Link key={c.id} href={`/recruitment?rt=${c.short}`} scroll={false} aria-current={i === at ? "page" : undefined}
+              style={i === at ? { boxShadow: `inset 0 -3px 0 ${REC_TAB_STYLE[c.name]?.head ?? "#188038"}`, color: REC_TAB_STYLE[c.name]?.head } : undefined}>{c.sheetTab ?? c.name}</Link>
+          ))}
+          <Link href={`/interviews?tab=${companies[at]?.short ?? ""}`} style={{ marginLeft: "auto" }}>Full screen ›</Link>
+        </div>
+      </SheetHeader>
+    ) : null;
     const t = tot(all.filter(past));
     const end = new Date(today.getTime() + 7 * 86_400_000);
     const soon = all.filter((r) => r.interviewDate >= today && r.interviewDate <= end);
@@ -56,6 +83,7 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
           <div className="stat"><b>{(t.leads / 1000).toFixed(0)}k</b><span>Leads</span></div>
           <div className="stat"><b>{num(t.conv, 2)}%</b><span>Conversion</span></div>
         </div>
+        {sheet}
         <div className="h2">Next 7 days <small>{soon.length} interviews</small></div>
         {soon.length ? (
           <div className="list">{soon.map((r) => (
@@ -85,6 +113,7 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
     body = (
       <>
         <nav className="seg">{companies.map((c) => <Link key={c.id} href={href(c.id, when)} aria-current={c.id === co?.id ? "page" : undefined}>{c.name.split(" ")[0]}</Link>)}</nav>
+        <Link href={`/interviews?tab=${co?.short ?? ""}`} className="btn sm" style={{ alignSelf: "flex-start" }}>▦ Open as sheet (all columns)</Link>
         <nav className="seg">{[["upcoming", "Upcoming"], ["done", "Done"], ["all", "All"]].map(([k, l]) => <Link key={k} href={href(co?.id ?? "", k)} aria-current={k === when ? "page" : undefined}>{l}</Link>)}</nav>
         {list.length ? (
           <div className="list">{list.map((r) => {
@@ -162,7 +191,7 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
   return (
     <>
       <h1 className="h1">Recruitment Command Center</h1>
-      <SyncBar last={cfg.last?.recruitment} label="the Recruitment Google Sheet" />
+      {tab !== "overview" && <SheetHeader kind="recruitment" title="Recruitment Google Sheet" last={cfg.last?.recruitment} canConnect={canConnect} />}
       <div className="chips">{TABS.map(([k, l]) => <Link key={k} href={`/recruitment?tab=${k}`} className="chip" aria-current={tab === k ? "page" : undefined}>{l}</Link>)}</div>
       {body}
     </>

@@ -9,10 +9,17 @@ import { fmtTime } from "@/lib/format";
 import { Flash } from "@/components/TaskCard";
 import { CopyBox } from "@/components/CopyBox";
 import { SnapshotUpload } from "@/components/SnapshotUpload";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 const KINDS: SheetKind[] = ["recruitment", "log", "broadcast"];
+/** Where each sheet lives in the app, for the "back" link of the one-sheet connect view. */
+const HOME: Record<SheetKind, [string, string]> = {
+  recruitment: ["/recruitment", "Recruitment Command Center"],
+  log: ["/logsheet", "Log Sheet"],
+  broadcast: ["/broadcast", "Broadcast"],
+};
 
-export default async function SheetsSettings({ searchParams }: { searchParams: Promise<{ e?: string; ok?: string }> }) {
+export default async function SheetsSettings({ searchParams }: { searchParams: Promise<{ e?: string; ok?: string; sheet?: string }> }) {
   const u = await requireModule("settings");
   const sp = await searchParams;
   const h = await headers();
@@ -27,17 +34,37 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
   const backup = await getBackupInfo();
   const payAdmin = u.has("payroll");
   const fresh = (at?: string) => !!at && Date.now() - new Date(at).getTime() < 26 * 3600_000;
+  const focus = KINDS.find((k) => k === sp.sheet);
+
+  const steps = (
+    <>
+      <p className="warn"><b>Do not delete the scripts the sheet already has.</b> This script is added as a new file beside them. Your Automation menu, daily tabs, reports and duplicate check keep working as before.</p>
+      <ol className="alist">
+        <li>Press <b>Copy script for this sheet</b>{focus ? "" : " above"}.</li>
+        <li>Open that Google Sheet with the owner account. Menu <b>Extensions → Apps Script</b>. Leave the code you see there as it is.</li>
+        <li>On the left, press <b>+</b> beside Files → <b>Script</b>. Name the new file <b>CMAOffice</b>. (Already have a CMAOffice file? Open it and replace its code instead.)</li>
+        <li>Only inside this new file: remove the three sample lines (<code>function myFunction…</code>), paste, press Save (💾).</li>
+        <li>At the top of the editor choose the function <b>cmaConnect</b> and press <b>▶ Run</b>. Google asks for permission: choose your account → Advanced → Go to (unsafe) → <b>Allow</b>.</li>
+        <li>This page then shows <b>Connected</b> by itself. When you reload the sheet, a new menu <b>CMA Office</b> appears next to your own menus.</li>
+      </ol>
+      <p className="hint">Keep the script private: it holds this app&apos;s key. Do not rename the tabs or move the columns of the sheet without telling, or the sync cannot find them.</p>
+    </>
+  );
 
   return (
     <>
-      <Link href="/settings" className="back">‹ Settings</Link>
-      <h1 className="h1">Google Sheets connection</h1>
+      {focus
+        ? <Link href={HOME[focus][0]} className="back">‹ {HOME[focus][1]}</Link>
+        : <Link href="/settings" className="back">‹ Settings</Link>}
+      <h1 className="h1">{focus ? `Connect: ${SHEET_LABEL[focus]}` : "Google Sheets connection"}</h1>
       <Flash sp={sp} />
       <p className="hint">
         Two-way: what is typed in a sheet comes to the app in a few seconds, and what is done in the app goes to the sheet within about a minute.
         In the app now: {counts[0]} interviews, {counts[1]} log rows, {counts[2]} call days.
+        {focus && <> · <Link href="/settings/sheets">All sheets</Link></>}
       </p>
-      {KINDS.map((k) => {
+      {focus && <AutoRefresh active={!fresh(cfg.last?.[focus]?.at)} />}
+      {(focus ? [focus] : KINDS).map((k) => {
         const last = cfg.last?.[k];
         const send = cfg.lastSend?.[k];
         const wait = waiting.find((w) => w.sheet === k)?._count ?? 0;
@@ -53,26 +80,18 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
               {send && <><br />Last to sheet: {fmtTime(new Date(send.at))}{send.ok ? "" : ` · problem: ${send.error}`}</>}
               {wait > 0 && <><br />{wait} change(s) waiting to go to the sheet.</>}
             </div>
+            {on && last?.url && <a className="btn sm" href={last.url} target="_blank" rel="noreferrer" style={{ alignSelf: "flex-start" }}>Open in Google ↗</a>}
             {admin && <CopyBox label="Copy script for this sheet" text={sheetScript(k, appUrl, cfg.secret)} />}
+            {admin && focus && (on
+              ? <p className="hint"><b>Connected.</b> Two-way sync is on. You only need the steps below again if you make a new copy of the sheet.</p>
+              : <p className="hint">Waiting for the sheet… this page checks every few seconds.</p>)}
+            {admin && focus && steps}
+            {!admin && <p className="hint">Only the super admin can copy the connect script.</p>}
           </div>
         );
       })}
-      {admin && (
-        <div className="card">
-          <b>How to connect a sheet (once per sheet, about 2 minutes)</b>
-          <p className="warn"><b>Do not delete the scripts the sheet already has.</b> This script is added as a new file beside them. Your Automation menu, daily tabs, reports and duplicate check keep working as before.</p>
-          <ol className="alist">
-            <li>Press <b>Copy script for this sheet</b> above.</li>
-            <li>Open that Google Sheet with the owner account. Menu <b>Extensions → Apps Script</b>. Leave the code you see there as it is.</li>
-            <li>On the left, press <b>+</b> beside Files → <b>Script</b>. Name the new file <b>CMAOffice</b>.</li>
-            <li>Only inside this new file: remove the three sample lines (<code>function myFunction…</code>), paste, press Save (💾).</li>
-            <li>At the top of the editor choose the function <b>cmaConnect</b> and press <b>▶ Run</b>. Google asks for permission: choose your account → Advanced → Go to (unsafe) → <b>Allow</b>.</li>
-            <li>This page then shows <b>Connected</b>. When you reload the sheet, a new menu <b>CMA Office</b> appears next to your own menus.</li>
-          </ol>
-          <p className="hint">Keep the script private: it holds this app&apos;s key. Do not rename the tabs or move the columns of the three sheets without telling, or the sync cannot find them.</p>
-        </div>
-      )}
-      {payAdmin && (
+      {admin && !focus && <div className="card"><b>How to connect a sheet (once per sheet, about 2 minutes)</b>{steps}</div>}
+      {payAdmin && !focus && (
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <b>Attendance &amp; Payroll backup sheet</b>
@@ -91,7 +110,7 @@ export default async function SheetsSettings({ searchParams }: { searchParams: P
           <p className="warn">This sheet shows everyone&apos;s salary. Share it only with the people who may see salaries.</p>
         </div>
       )}
-      {admin && (
+      {admin && !focus && (
         <SnapshotUpload />
       )}
     </>
