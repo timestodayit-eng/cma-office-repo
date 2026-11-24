@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { fmtDay, todayDhaka } from "@/lib/format";
 import { getSheetConfig } from "@/lib/outbox";
-import { SyncBar } from "@/components/SyncBar";
+import { SheetHeader } from "@/components/SheetHeader";
 import { AGENCY_COLOR } from "@/components/BcCard";
 
 const num = (v: number | null | undefined, d = 0) =>
@@ -162,7 +162,8 @@ export default async function Recruitment({ searchParams }: { searchParams: Prom
   return (
     <>
       <h1 className="h1">Recruitment Command Center</h1>
-      <SyncBar last={cfg.last?.recruitment} label="the Recruitment Google Sheet" />
+      <SheetHeader kind="recruitment" title="Recruitment Google Sheet" last={cfg.last?.recruitment}
+        canConnect={u.level === "SUPER_ADMIN" && u.can("settings", "EDIT")} />
       <div className="chips">{TABS.map(([k, l]) => <Link key={k} href={`/recruitment?tab=${k}`} className="chip" aria-current={tab === k ? "page" : undefined}>{l}</Link>)}</div>
       {body}
     </>

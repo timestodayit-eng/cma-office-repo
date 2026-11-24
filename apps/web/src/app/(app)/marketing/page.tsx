@@ -41,7 +41,7 @@ export default async function Marketing({ searchParams }: { searchParams: Promis
     <>
       <h1 className="h1">Marketing</h1>
       <Flash sp={sp} />
-      <SyncBar last={cfg.last?.recruitment} label="the Recruitment Google Sheet" />
+      <SyncBar last={cfg.last?.recruitment} label="the Recruitment Google Sheet" kind="recruitment" />
       <div className="stats three">
         <div className="stat"><b>{ivs.length - running}</b><span>Coming / handed</span></div>
         <div className="stat"><b>{running}</b><span>Running / done</span></div>

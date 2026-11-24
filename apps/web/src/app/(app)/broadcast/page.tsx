@@ -38,7 +38,7 @@ export default async function Broadcast({ searchParams }: { searchParams: Promis
   return (
     <>
       <h1 className="h1">Call &amp; SMS Broadcast</h1>
-      <SyncBar last={cfg.last?.broadcast} label="the Banglalink Call Broadcast Panel sheet" />
+      <SyncBar last={cfg.last?.broadcast} label="the Banglalink Call Broadcast Panel sheet" kind="broadcast" />
       <Flash sp={sp} />
       <div className="stats three">
         <div className="stat"><b style={{ color: open.length ? "var(--amber)" : undefined }}>{open.length}</b><span>To send now</span></div>

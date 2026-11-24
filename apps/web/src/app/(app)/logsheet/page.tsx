@@ -156,7 +156,7 @@ export default async function LogSheet({ searchParams }: { searchParams: Promise
         <div className="gsh">
           <span className="gsi">▦</span>
           <div className="grow"><b>Digital Media Solution Log Sheet</b><span>{connected ? "Connected to your Google Sheet · two-way sync" : "Not connected to the Google Sheet yet"}</span></div>
-          {last?.url ? <a className="btn sm" href={last.url} target="_blank" rel="noreferrer">Open in Google ↗</a> : <Link className="btn sm" href="/settings/sheets">Connect the sheet</Link>}
+          {last?.url ? <a className="btn sm" href={last.url} target="_blank" rel="noreferrer">Open in Google ↗</a> : <Link className="btn sm" href="/settings/sheets?sheet=log">Connect the sheet</Link>}
         </div>
         <div className={`gsn${connected ? "" : " off"}`}><span className="dot" />
           {connected
