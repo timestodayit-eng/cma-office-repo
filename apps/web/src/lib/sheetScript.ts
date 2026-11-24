@@ -197,6 +197,14 @@ function cmaFreeRow_(sh, h) {
   return h.row + 1 + r;
 }
 
+function cmaFirstEmptyRow_(sh, h) {
+  var cCo = h.map['company name'] || 2, last = sh.getLastRow();
+  if (last <= h.row) return h.row + 1;
+  var vals = sh.getRange(h.row + 1, cCo, last - h.row, 1).getValues();
+  for (var i = vals.length - 1; i >= 0; i--) if (String(vals[i][0]).trim() !== '') return h.row + 2 + i;
+  return h.row + 1;
+}
+
 function cmaFindRow_(sh, h, co, date) {
   var last = sh.getLastRow();
   if (last <= h.row) return 0;
@@ -241,6 +249,8 @@ function cmaRecRow_(sh, op) {
   var want = String(e.co).trim().toLowerCase().replace(/\s+/g, ' ') + '|' + e.date;
   if (key(row) !== want) {
     row = e.co && e.date ? cmaFindRow_(sh, h, e.co, e.date) : 0;
+    // A new row typed in the app's empty rows: if somebody filled that row in the sheet meanwhile, use the first empty row under the data.
+    if (!row && op.isNew) row = cmaFirstEmptyRow_(sh, h);
     if (!row) throw new Error('Row not found in ' + sh.getName() + ': ' + e.co + ' ' + e.date);
   }
   op.cells.forEach(function (c) {

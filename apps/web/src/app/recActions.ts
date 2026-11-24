@@ -8,7 +8,7 @@ import { recCols, recKeyCols, dayLabel, isIsoDate, type Cell } from "@/lib/recCo
 import { recRowRef } from "@/lib/recSheet";
 
 type OpCell = { c: number; v: Cell; t?: string };
-type RecOp = { type: "rec.row"; tab: string; row: number; expect: { coCol: number; dateCol: number; co: string; date: string }; cells: OpCell[] };
+type RecOp = { type: "rec.row"; tab: string; row: number; isNew?: boolean; expect: { coCol: number; dateCol: number; co: string; date: string }; cells: OpCell[] };
 
 /**
  * One cell typed in the sheet-style Interview List. It is saved here, sent to the same cell
@@ -20,11 +20,16 @@ export async function saveRecCell(input: { tab: string; row: number; col: number
   if (!u.can("interviews", "EDIT") && !u.can("recruitment", "EDIT")) return { error: "No edit access" };
   const { tab, row, col } = input;
   if (!Number.isInteger(row) || row < 2 || !Number.isInteger(col) || col < 0) return { error: "Unknown cell" };
-  const [head, cur] = await Promise.all([
+  const [head, found, last] = await Promise.all([
     prisma.recSheetRow.findUnique({ where: { tab_row: { tab, row: 1 } } }),
     prisma.recSheetRow.findUnique({ where: { tab_row: { tab, row } } }),
+    prisma.recSheetRow.findFirst({ where: { tab }, orderBy: { row: "desc" }, select: { row: true } }),
   ]);
-  if (!head || !cur) return { error: "This row is not in the sheet yet. Wait for the next sync, then try again." };
+  if (!head) return { error: "This tab is not in the app yet. Wait for the next sync, then try again." };
+  // One of the empty rows under the last row: it becomes a new row of the sheet (agency name filled in column A).
+  const isNewRow = !found && !!last && row > last.row && row <= last.row + 10;
+  if (!found && !isNewRow) return { error: "This row is not in the sheet yet. Wait for the next sync, then try again." };
+  const cur = found ?? (await prisma.recSheetRow.create({ data: { tab, row, cells: [] as never } }));
   const header = head.cells as Cell[];
   const def = recCols(tab, header, { money: true }).find((d) => d.i === col);
   if (!def?.edit) return { error: "This column is filled in the Google Sheet only" };
@@ -43,6 +48,7 @@ export async function saveRecCell(input: { tab: string; row: number; col: number
   if (cells[col] === v || (cells[col] == null && v == null)) return { ok: true as const, cells };
   cells[col] = v;
   const changes: OpCell[] = [{ c: col + 1, v, t: def.kind === "date" ? "date" : undefined }];
+  if (!String(cells[0] ?? "").trim() && col !== 0 && v != null) { cells[0] = tab; changes.push({ c: 1, v: tab }); }
   const dayCol = header.findIndex((h) => String(h ?? "").toLowerCase().trim() === "day");
   if (col === keys.date && dayCol >= 0) {
     while (cells.length <= dayCol) cells.push(null);
@@ -60,7 +66,7 @@ export async function saveRecCell(input: { tab: string; row: number; col: number
     const merged = new Map<number, OpCell>((prev?.cells ?? []).map((c) => [c.c, c]));
     for (const c of changes) merged.set(c.c, c);
     const op: RecOp = {
-      type: "rec.row", tab, row,
+      type: "rec.row", tab, row, isNew: prev ? prev.isNew : isNewRow,
       expect: prev?.expect ?? { coCol: keys.co + 1, dateCol: keys.date + 1, co: before.co, date: before.date },
       cells: [...merged.values()],
     };
@@ -91,5 +97,6 @@ export async function saveRecCell(input: { tab: string; row: number; col: number
   }
   await prisma.auditLog.create({ data: { userId: u.id, action: "update", entity: "recsheet", entityId: cur.id, data: { tab, row, col: def.label } } });
   revalidatePath("/interviews");
+  revalidatePath("/recruitment");
   return { ok: true as const, cells };
 }

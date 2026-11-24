@@ -6,6 +6,7 @@ import { inkOn } from "@/lib/logLists";
 import { saveRecCell } from "@/app/recActions";
 
 export type RecGridRow = { row: number; cells: Cell[] };
+const EMPTY_ROWS = 10;
 
 /** One agency tab of the Recruitment sheet as a sheet: click a cell to type, Enter goes down, Tab goes right. */
 export function RecGrid(props: {
@@ -27,7 +28,9 @@ export function RecGrid(props: {
     const d = r.cells[keys.date];
     return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
   };
-  const shown = rows.filter((r) => {
+  const filtering = !!(f.when || f.st || f.q);
+  const lastRow = rows.reduce((m, r) => Math.max(m, r.row), 1);
+  const data = rows.filter((r) => {
     const d = dateOf(r);
     if (f.when === "soon" && !(d && d >= today && d <= soonEnd)) return false;
     if (f.when === "upcoming" && !(d && d >= today)) return false;
@@ -36,6 +39,10 @@ export function RecGrid(props: {
     if (f.q && !r.cells.some((c) => String(c ?? "").toLowerCase().includes(f.q.toLowerCase()))) return false;
     return true;
   });
+  // 10 empty rows under the last one, like the Google Sheet, so a new interview can be typed straight in.
+  const shown = canEdit && !filtering
+    ? [...data, ...Array.from({ length: EMPTY_ROWS }, (_, k) => ({ row: lastRow + 1 + k, cells: [] as Cell[] }))]
+    : data;
   // Open at this week's interviews, a few rows above the first one from today on.
   useEffect(() => {
     const w = wrap.current;
@@ -50,11 +57,14 @@ export function RecGrid(props: {
     const old = row.cells[col.i];
     const now = col.kind === "check" ? raw === "true" : raw.trim();
     if (String(old ?? "") === String(now ?? "") || (old == null && now === "")) return;
-    setRows((prev) => prev.map((x) => {
-      if (x.row !== row.row) return x;
-      const cells = [...x.cells]; while (cells.length <= col.i) cells.push(null);
-      cells[col.i] = now === "" ? null : now; return { ...x, cells };
-    }));
+    setRows((prev) => {
+      const base = prev.some((x) => x.row === row.row) ? prev : [...prev, { row: row.row, cells: [tab] as Cell[] }];
+      return base.map((x) => {
+        if (x.row !== row.row) return x;
+        const cells = [...x.cells]; while (cells.length <= col.i) cells.push(null);
+        cells[col.i] = now === "" ? null : now; return { ...x, cells };
+      });
+    });
     start(async () => {
       const res = await saveRecCell({ tab, row: row.row, col: col.i, value: String(now) });
       if ("error" in res) return setMsg({ text: res.error ?? "Not saved", bad: true });
